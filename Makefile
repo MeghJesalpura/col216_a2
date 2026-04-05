@@ -21,5 +21,6 @@ compile:
 # Example below assumes a Python script named 'compiler.py'.
 run:
 	@echo "Preprocessing $(FILE)..."
-	python3 compiler.py $(FILE)
+	g++ compiler/compiler.cpp -o compiler.out
+	./compiler.out $(FILE)
 	@echo "Preprocessing complete."
