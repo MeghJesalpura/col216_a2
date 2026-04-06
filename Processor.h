@@ -8,7 +8,8 @@
 #include "ExecutionUnit.h"
 #include "LoadStoreQueue.h"
 
-class Processor {
+class Processor
+{
 public:
     int pc;
     int clock_cycle;
@@ -18,21 +19,26 @@ public:
     std::vector<Instruction> inst_memory;
 
     // architectural state (do not change)
-    std::vector<int> ARF; // regFile
+    std::vector<int> ARF;    // regFile
     std::vector<int> Memory; // Memory
-    bool exception = false; // exception bit
+    bool exception = false;  // exception bit
 
     // register alias table / reorder buffer
 
+    std::vector<ROBEntry> ROB;
+    std::vector<RATEntry> RAT;
     std::vector<ExecutionUnit> units;
-    LoadStoreQueue* lsq;
+    LoadStoreQueue *lsq;
     BranchPredictor bp;
 
-    Processor(ProcessorConfig& config) {
+    Processor(ProcessorConfig &config)
+    {
         pc = 0;
         clock_cycle = 0;
         ARF.resize(config.num_regs, 0);
         Memory.resize(config.mem_size);
+        ROB.resize(config.rob_size);
+        RAT.resize(config.num_regs);
 
         // Instantiate Hardware Units
         // Adder
@@ -41,9 +47,17 @@ public:
         // Branch Computation
         // Bitwise Logic
         // Load-Store Unit
-    }
+        ExecutionUnit Adder(UnitType::ADDER, config.add_lat);
+        ExecutionUnit Multiplier(UnitType::MULTIPLIER, config.mul_lat);
+        ExecutionUnit Divider(UnitType::DIVIDER, config.div_lat);
+        ExecutionUnit BranchCmpr(UnitType::BRANCH, config.add_lat);
+        // mentioned to take Branch Comparison latency equal to addition latency
+        ExecutionUnit BitLogic(UnitType::LOGIC, config.logic_lat);
+        ExecutionUnit LoadStore(UnitType::LOADSTORE, config.mem_lat);
+        }
 
-    void loadProgram(const std::string& filename) {
+    void loadProgram(const std::string &filename)
+    {
         std::ifstream file(filename);
     }
 
@@ -59,18 +73,23 @@ public:
 
     void stageCommit() {};
 
-    bool step() {
+    bool step()
+    {
         clock_cycle++;
         return true; // return false if CPU has no more to do after this cycle
     }
 
-    void dumpArchitecturalState() {
+    void dumpArchitecturalState()
+    {
         std::cout << "\n=== ARCHITECTURAL STATE (CYCLE " << clock_cycle << ") ===\n";
-        for (int i = 0; i < ARF.size(); i++) {
+        for (int i = 0; i < ARF.size(); i++)
+        {
             std::cout << "x" << i << ": " << std::setw(4) << ARF[i] << " | ";
-            if ((i+1) % 8 == 0) std::cout << std::endl;
+            if ((i + 1) % 8 == 0)
+                std::cout << std::endl;
         }
-        if (exception) {
+        if (exception)
+        {
             std::cout << "EXCEPTION raised by instruction " << pc + 1 << std::endl;
         }
         std::cout << "Branch Predictor Stats: " << bp.correct_predictions << "/" << bp.total_branches << " correct.\n";

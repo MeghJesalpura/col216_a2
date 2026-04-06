@@ -4,15 +4,16 @@
 #include <string>
 #include "Basics.h"
 
-class ExecutionUnit {
+class ExecutionUnit
+{
 public:
     // per-unit reservation station
     UnitType name;
     int latency;
-    
-    bool has_result = false; // result flag
+
+    bool has_result = false;    // result flag
     bool has_exception = false; // exception flag
-    
+    ExecutionUnit(UnitType tname, int val) {};
     void capture(int tag, int val) {};
     void executeCycle() {};
 };

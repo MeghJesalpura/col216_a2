@@ -1,10 +1,42 @@
 #pragma once
 #include <string>
 
-enum class OpCode { ADD, SUB, ADDI, MUL, DIV, REM, LW, SW, BEQ, BNE, BLT, BLE, J, SLT, SLTI, AND, OR, XOR, ANDI, ORI, XORI };
-enum class UnitType { ADDER, MULTIPLIER, DIVIDER, LOADSTORE, BRANCH, LOGIC };
+enum class OpCode
+{
+    ADD,
+    SUB,
+    ADDI,
+    MUL,
+    DIV,
+    REM,
+    LW,
+    SW,
+    BEQ,
+    BNE,
+    BLT,
+    BLE,
+    J,
+    SLT,
+    SLTI,
+    AND,
+    OR,
+    XOR,
+    ANDI,
+    ORI,
+    XORI
+};
+enum class UnitType
+{
+    ADDER,
+    MULTIPLIER,
+    DIVIDER,
+    LOADSTORE,
+    BRANCH,
+    LOGIC
+};
 
-struct Instruction {
+struct Instruction
+{
     OpCode op;
     int dest;
     int src1;
@@ -13,7 +45,8 @@ struct Instruction {
     int pc;
 };
 
-struct ProcessorConfig {
+struct ProcessorConfig
+{
     int num_regs = 32;
     int rob_size = 64;
     int mem_size = 1024;
@@ -32,12 +65,32 @@ struct ProcessorConfig {
     int lsq_rs_size = 32;
 };
 
-struct ROBEntry {
+struct ROBEntry
+{
     // valid bit, ready bit, architectural register ID
+
+    bool valid_bit;
+    bool ready_bit;
+    int reg_id;
     // other fields as required
 };
 
-struct RSEntry {
+struct RSEntry
+{
     // value, tag, ready ... for both operands
+    int val1;
+    int tag1;
+    bool ready1;
+
+    int val2;
+    int tag2;
+    bool ready2;
     // other fields as required
+};
+
+struct RATEntry
+{
+    int tag;
+    int val;
+    bool isValid;
 };
