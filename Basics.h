@@ -37,6 +37,8 @@ enum class UnitType
 
 struct Instruction
 {
+    bool fetched = false;
+    
     OpCode op;
     int dest;
     int src1;

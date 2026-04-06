@@ -19,6 +19,7 @@ static inline string toLower(string s)
 RISCVCompiler::RISCVCompiler() : current_instr_idx(0), data_word_index(0)
 {
   initRegAliases();
+  initOpcodeToBasicOpCode();
 }
 
 void RISCVCompiler::initRegAliases()
@@ -46,12 +47,12 @@ string RISCVCompiler::stripComments(const string &s) const
 
 string RISCVCompiler::trim(const string &s)
 {
-  int a = 0;
+  size_t a = 0;
   while (a < s.size() && isspace(s[a]))
     ++a;
   if (a == s.size())
     return "";
-  int b = s.size() - 1;
+  size_t b = s.size() - 1;
   while (b > a && isspace(s[b]))
     --b;
   return s.substr(a, b - a + 1);
@@ -79,7 +80,7 @@ bool RISCVCompiler::isNumber(const string &s)
 
   if (s.size() > 1 && (s[0] == '+' || s[0] == '-'))
   {
-    for (int i = 1; i < s.size(); ++i)
+    for (size_t i = 1; i < s.size(); ++i)
       if (!isdigit(s[i]))
         return false;
     return true;
@@ -87,13 +88,13 @@ bool RISCVCompiler::isNumber(const string &s)
 
   if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
   {
-    for (int i = 2; i < s.size(); ++i)
+    for (size_t i = 2; i < s.size(); ++i)
       if (!isxdigit(s[i]))
         return false;
     return true;
   }
 
-  for (int i = 0; i < s.size(); ++i)
+  for (size_t i = 0; i < s.size(); ++i)
     if (!isdigit(s[i]))
       return false;
   return true;
@@ -180,9 +181,9 @@ void RISCVCompiler::scanInstruction(const string &line)
   if (toks.empty())
     return;
 
-  Instruction inst;
+  CompilerInstruction inst;
   inst.opcode = toks[0];
-  for (int i = 1; i < toks.size(); ++i)
+  for (size_t i = 1; i < toks.size(); ++i)
   {
     inst.operands.push_back(toks[i]);
   }
@@ -199,9 +200,8 @@ void RISCVCompiler::scanInstruction(const string &line)
 
     if (!isNumber(target))
     {
-      bool is_branch = (op_lower == "beq" || op_lower == "bne" || op_lower == "blt" ||
-                        op_lower == "bge" || op_lower == "ble" || op_lower == "bgt");
-      bool is_jump = (op_lower == "j" || op_lower == "jal");
+      bool is_branch = (op_lower == "beq" || op_lower == "bne" || op_lower == "blt" || op_lower == "ble");
+      bool is_jump = (op_lower == "j");
       int last_op_index = static_cast<int>(inst.operands.size()) - 1;
 
       if (is_branch)
@@ -211,7 +211,7 @@ void RISCVCompiler::scanInstruction(const string &line)
     }
   }
 
-  for (int i = 0; i < inst.operands.size(); ++i)
+  for (size_t i = 0; i < inst.operands.size(); ++i)
   {
     const string &op = inst.operands[i];
     int open_paren = op.find('(');
@@ -221,7 +221,7 @@ void RISCVCompiler::scanInstruction(const string &line)
     {
       string label = trim(op.substr(0, open_paren));
       if (!label.empty() && !isNumber(label))
-        relocations.push_back({Relocation::MEMORY, idx, i, label});
+        relocations.push_back({Relocation::MEMORY, idx, static_cast<int>(i), label});
     }
   }
 }
@@ -268,7 +268,7 @@ void RISCVCompiler::link()
     if (r.instr_index < 0 || r.instr_index >= static_cast<int>(instructions.size()))
       continue;
 
-    Instruction &inst = instructions[r.instr_index];
+    CompilerInstruction &inst = instructions[r.instr_index];
 
     if (r.kind == Relocation::BRANCH || r.kind == Relocation::JUMP)
     {
@@ -308,7 +308,7 @@ void RISCVCompiler::link()
     }
   }
 
-  for (Instruction &inst : instructions)
+  for (CompilerInstruction &inst : instructions)
   {
     for (string &op : inst.operands)
     {
@@ -361,7 +361,7 @@ void RISCVCompiler::writeOutput(const string &out_filename) const
     ofs << "\n";
   }
 
-  for (const Instruction &inst : instructions)
+  for (const CompilerInstruction &inst : instructions)
   {
     ofs << inst.opcode;
     for (const string &op : inst.operands)
@@ -370,6 +370,87 @@ void RISCVCompiler::writeOutput(const string &out_filename) const
   }
   ofs.close();
   cout << "Wrote preprocessed output to: " << out_filename << "\n";
+}
+
+std::vector<Instruction> RISCVCompiler::getInstructions()
+{
+  vector<Instruction> result;
+  for (const CompilerInstruction &inst : instructions)
+  {
+    Instruction i;
+    i.op = opcode_to_BasicOpCode[toLower(inst.opcode)];
+    i.pc = inst.instr_index;
+    i.dest = -1;
+    i.src1 = -1;
+    i.src2 = -1;
+    i.imm = 0;
+
+    if (i.op == OpCode::J)
+    {
+      i.imm = stoi(inst.operands[0]);
+    }
+    else if (i.op == OpCode::LW || i.op == OpCode::SW)
+    {
+      if (i.op == OpCode::LW)
+        i.dest = reg(inst.operands[0]);
+      else
+        i.src2 = reg(inst.operands[0]);
+
+      int op = inst.operands[1].find('(');
+      int cl = inst.operands[1].find(')');
+      i.imm = stoi(inst.operands[1].substr(0, op));
+      i.src1 = reg(inst.operands[1].substr(op + 1, cl - op - 1));
+    }
+    else if (i.op == OpCode::BEQ || i.op == OpCode::BNE || i.op == OpCode::BLT || i.op == OpCode::BLE)
+    {
+      i.src1 = reg(inst.operands[0]);
+      i.src2 = reg(inst.operands[1]);
+      i.imm = stoi(inst.operands[2]);
+    }
+    else if (i.op == OpCode::ADDI || i.op == OpCode::SLTI || i.op == OpCode::ANDI || i.op == OpCode::ORI || i.op == OpCode::XORI)
+    {
+      i.dest = reg(inst.operands[0]);
+      i.src1 = reg(inst.operands[1]);
+      i.imm = stoi(inst.operands[2]);
+    }
+    else
+    {
+      i.dest = reg(inst.operands[0]);
+      i.src1 = reg(inst.operands[1]);
+      i.src2 = reg(inst.operands[2]);
+    }
+
+    result.push_back(i);
+  }
+
+  return result;
+}
+
+void RISCVCompiler::initOpcodeToBasicOpCode()
+{
+  opcode_to_BasicOpCode = {
+      {"add", OpCode::ADD},
+      {"sub", OpCode::SUB},
+      {"addi", OpCode::ADDI},
+      {"mul", OpCode::MUL},
+      {"div", OpCode::DIV},
+      {"rem", OpCode::DIV},
+      {"lw", OpCode::LW},
+      {"sw", OpCode::SW},
+      {"beq", OpCode::BEQ},
+      {"bne", OpCode::BNE},
+      {"blt", OpCode::BLT},
+      {"ble", OpCode::BLE},
+      {"j", OpCode::J},
+      {"slt", OpCode::SLT},
+      {"slti", OpCode::SLTI},
+      {"and", OpCode::AND},
+      {"or", OpCode::OR},
+      {"xor", OpCode::XOR},
+      {"andi", OpCode::ANDI},
+      {"ori", OpCode::ORI},
+      {"xori", OpCode::XORI},
+  };
 }
 
 void RISCVCompiler::compile(const string &riscv_code, const string &out_filename)
@@ -381,6 +462,7 @@ void RISCVCompiler::compile(const string &riscv_code, const string &out_filename
   writeOutput(out_filename);
 }
 
+#ifndef SIMULATOR
 int main(int argc, char *argv[])
 {
   if (argc != 2)
@@ -414,3 +496,4 @@ int main(int argc, char *argv[])
   }
   return 0;
 }
+#endif

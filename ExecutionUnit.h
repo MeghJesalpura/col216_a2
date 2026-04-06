@@ -13,7 +13,7 @@ public:
 
     bool has_result = false;    // result flag
     bool has_exception = false; // exception flag
-    ExecutionUnit(UnitType tname, int val) {};
-    void capture(int tag, int val) {};
-    void executeCycle() {};
+    ExecutionUnit(UnitType tname, int val);
+    void capture(int tag, int val);
+    void executeCycle();
 };
