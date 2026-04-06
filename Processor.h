@@ -12,10 +12,13 @@
 
 class Processor
 {
+private:
+    bool createRSEntry(Instruction &instr, int rob_index);
+
 public:
     int pc;
     int clock_cycle;
-
+    int curr_tag;
     // pipeline registers
 
     std::vector<Instruction> inst_memory;
@@ -29,6 +32,9 @@ public:
     // register alias table / reorder buffer
 
     std::vector<ROBEntry> ROB;
+    int rob_start;
+    int rob_end;
+    int rob_capacity;
     std::vector<RATEntry> RAT;
     std::vector<ExecutionUnit> units;
 

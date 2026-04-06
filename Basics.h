@@ -38,7 +38,7 @@ enum class UnitType
 struct Instruction
 {
     bool fetched = false;
-    
+
     OpCode op;
     int dest;
     int src1;
@@ -69,16 +69,23 @@ struct ProcessorConfig
 
 struct ROBEntry
 {
-    // valid bit, ready bit, architectural register ID
-
     bool valid_bit = false;
     bool ready_bit;
     int reg_id;
+    // valid bit, ready bit, architectural register ID
+    ROBEntry(bool tvalid, bool tready, int id)
+    {
+        valid_bit = tvalid;
+        ready_bit = tready;
+        reg_id = id;
+    }
     // other fields as required
 };
 
 struct RSEntry
 {
+    int dest_tag;
+
     // value, tag, ready ... for both operands
     int val1;
     int tag1;
@@ -88,6 +95,16 @@ struct RSEntry
     int tag2;
     bool ready2;
     // other fields as required
+    RSEntry(int dest, int v1, int t1, bool r1, int v2, int t2, bool r2)
+    {
+        dest_tag = dest;
+        val1 = v1;
+        tag1 = t1;
+        ready1 = r1;
+        val2 = v2;
+        tag2 = t2;
+        ready2 = r2;
+    }
 };
 
 struct RATEntry
@@ -95,4 +112,11 @@ struct RATEntry
     int tag;
     int val;
     bool isValid;
+
+    RATEntry(int v, int t, bool val)
+    {
+        tag = t;
+        val = v;
+        isValid = val;
+    }
 };
