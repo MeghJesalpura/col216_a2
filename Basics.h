@@ -71,7 +71,7 @@ struct ROBEntry
 {
     // valid bit, ready bit, architectural register ID
 
-    bool valid_bit;
+    bool valid_bit = false;
     bool ready_bit;
     int reg_id;
     // other fields as required
