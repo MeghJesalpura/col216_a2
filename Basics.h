@@ -74,6 +74,8 @@ struct ROBEntry
   int reg_id = 0;
   int value = 0;
   int pc_entry = 0;
+  bool exception = false;
+  int predicted_next_pc = -1; // For branches: what PC was predicted after this instr
 
   ROBEntry() : valid_bit(false), ready_bit(false), reg_id(0), value(0), pc_entry(0) {}
   ROBEntry(bool tvalid, bool tready, int id, int pc = 0)
@@ -102,6 +104,7 @@ struct RSEntry
   // other fields as required
   bool isValid = false;    // true when is filled with a valid instruction
   bool dispatched = false; // true when the instruction has been dispatched to execution (for tracking in-order completion)
+  unsigned long long seq_num = 0;
   RSEntry() : opcode(OpCode::ADD), dest_tag(0),
               val1(0), tag1(0), ready1(false),
               val2(0), tag2(0), ready2(false), isValid(false), dispatched(false) {}

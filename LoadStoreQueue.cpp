@@ -11,7 +11,6 @@ bool LoadStoreQueue::has_space()
 
 void LoadStoreQueue::capture(int tag, int val)
 {
-  cout << "[DEBUG][LSQ] capture tag=" << tag << " val=" << val << '\n';
   for (auto &entry : q)
   {
     if (!entry.addr_ready && entry.addr_tag == tag)
@@ -32,7 +31,6 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 {
   has_result = false;
   has_exception = false;
-  cout << "[DEBUG][LSQ] executeCycle size=" << q.size() << '\n';
 
   if (q.empty())
     return;
@@ -50,7 +48,6 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
   if (!entry.addr_ready)
   {
-    cout << "[DEBUG][LSQ] head address not ready" << '\n';
     return;
   }
 
@@ -102,7 +99,6 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
     if (!entry.broadcasted)
     {
-      cout << "[DEBUG][LSQ] load complete tag=" << entry.dest_tag << " value=" << loaded_val << '\n';
       has_result = true;
       has_exception = false;
       result_tag = entry.dest_tag;
@@ -134,7 +130,6 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
     if (!entry.broadcasted)
     {
-      cout << "[DEBUG][LSQ] store complete tag=" << entry.dest_tag << " addr=" << eff_addr << '\n';
       has_result = true;
       has_exception = false;
       result_tag = entry.dest_tag;
@@ -148,7 +143,6 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
 void LoadStoreQueue::commitEntry(int tag, std::vector<int> &Memory)
 {
-  cout << "[DEBUG][LSQ] commitEntry tag=" << tag << '\n';
   if (!q.empty() && q.front().dest_tag == tag)
   {
     if (q.front().type == LSQEntryType::STORE && !q.front().exception)
@@ -165,8 +159,6 @@ void LoadStoreQueue::commitEntry(int tag, std::vector<int> &Memory)
 
 void LoadStoreQueue::createLSQEntry(const Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, std::vector<ROBEntry> &ROB)
 {
-  cout << "[DEBUG][LSQ] enqueue op=" << static_cast<int>(instr.op)
-       << " rob_index=" << rob_index << '\n';
   LSQEntry entry;
   entry.type = (instr.op == OpCode::LW) ? LSQEntryType::LOAD : LSQEntryType::STORE;
   entry.dest_tag = rob_index;

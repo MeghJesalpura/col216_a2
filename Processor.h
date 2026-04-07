@@ -45,6 +45,7 @@ public:
     std::vector<CDBEntry> CDB; // Common Data Bus for broadcasting results from execution units and LSQ
 
     int pc_last_executed = -1; // To track the last executed instruction's PC for exception handling
+    int exception_pc = -1;     // PC of the instruction that caused an exception
 
     Processor(ProcessorConfig &config);
 

@@ -16,6 +16,7 @@ public:
 
   UnitType name;
   int latency;
+  unsigned long long next_seq = 0;
 
   int findFreeEntry();
 
@@ -29,5 +30,6 @@ public:
   void createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB);
   void capture(int tag, int val);
   void executeCycle();
+  void dispatchReady();
   void flush();
 };

@@ -4,7 +4,6 @@ using std::cout;
 
 Processor::Processor(ProcessorConfig &config)
 {
-  cout << "[DEBUG][Processor] initialize" << '\n';
   pc = 0;
   clock_cycle = 0;
   curr_tag = 0;
@@ -56,18 +55,21 @@ void Processor::loadProgram(const std::string &filename)
   std::string riscv_code = buffer.str();
   compiler.compile(riscv_code, "temp.pre");
   inst_memory = compiler.getInstructions();
-  cout << "[DEBUG][loadProgram] loaded " << inst_memory.size() << " instructions" << '\n';
+    Memory = compiler.getDataWords();
 }
 
 void Processor::stageFetch()
 {
-  cout << "[DEBUG][Fetch] pc=" << pc
-       << " rob_start=" << rob_start
-       << " rob_end=" << rob_end
-       << " inst_count=" << inst_memory.size() << '\n';
+  // Don't fetch if previous instruction hasn't been consumed by decode
+  if (fetched_instr.fetched)
+    return;
+
+  // Don't fetch after exception
+  if (exception)
+    return;
+
   if (pc < 0 || pc / 4 >= static_cast<int>(inst_memory.size()))
   {
-    cout << "[DEBUG][Fetch] no instruction fetched" << '\n';
     fetched_instr.fetched = false;
     return;
   }
@@ -75,9 +77,6 @@ void Processor::stageFetch()
   fetched_instr = inst_memory[pc / 4];
   fetched_instr.pc = pc; // Ensure PC is stored in instruction
   fetched_instr.fetched = true;
-  cout << "[DEBUG][Fetch] fetched opcode=" << static_cast<int>(fetched_instr.op)
-       << " imm=" << fetched_instr.imm
-       << " pc=" << fetched_instr.pc << '\n';
 
   bool is_branch = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
                     fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
@@ -86,25 +85,21 @@ void Processor::stageFetch()
   {
     if (bp.predict(pc, fetched_instr.imm, fetched_instr.op))
     {
-      cout << "[DEBUG][Fetch] branch predicted taken" << '\n';
       pc = pc + fetched_instr.imm * 4;
     }
     else
     {
-      cout << "[DEBUG][Fetch] branch predicted not taken" << '\n';
       pc = pc + 4;
     }
   }
   else if (fetched_instr.op == OpCode::J)
   {
-    cout << "[DEBUG][Fetch] jump taken" << '\n';
     pc = pc + fetched_instr.imm * 4;
   }
   else
   {
     pc = pc + 4;
   }
-  cout << "[DEBUG][Fetch] next pc=" << pc << '\n';
 }
 
 int Processor::selectUnitForOpcode(const Instruction &instr, bool &is_lsq)
@@ -147,8 +142,11 @@ int Processor::selectUnitForOpcode(const Instruction &instr, bool &is_lsq)
 
 void Processor::stageDecode()
 {
-  cout << "[DEBUG][Decode] fetched=" << fetched_instr.fetched << '\n';
   if (!fetched_instr.fetched)
+    return;
+
+  // Don't decode after exception
+  if (exception)
     return;
 
   bool is_lsq = false;
@@ -158,7 +156,6 @@ void Processor::stageDecode()
   {
     if (!lsq->has_space())
     {
-      cout << "[DEBUG][Decode] LSQ full" << '\n';
       return;
     }
   }
@@ -166,24 +163,20 @@ void Processor::stageDecode()
   {
     if (!units[unit_idx].has_space())
     {
-      cout << "[DEBUG][Decode] unit " << unit_idx << " full" << '\n';
       return;
     }
   }
   else
   {
-    cout << "[DEBUG][Decode] unsupported opcode" << '\n';
     return;
   }
 
   if ((rob_end + 1) % rob_capacity == rob_start)
   {
-    cout << "[DEBUG][Decode] ROB full" << '\n';
     return;
   }
 
   int rob_index = rob_end;
-  cout << "[DEBUG][Decode] allocating ROB index=" << rob_index << '\n';
 
   if (is_lsq)
   {
@@ -203,9 +196,15 @@ void Processor::stageDecode()
   }
 
   ROBEntry rob_entry(true, false, dest, fetched_instr.pc);
+  // For branches, store the predicted next PC so we can detect mispredictions at commit
+  bool is_branch_instr = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
+                          fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
+  if (is_branch_instr)
+  {
+    rob_entry.predicted_next_pc = pc; // pc was already set by fetch's branch prediction
+  }
   ROB[rob_end] = rob_entry;
   rob_end = (rob_end + 1) % rob_capacity;
-  cout << "[DEBUG][Decode] rob_end advanced to " << rob_end << '\n';
 
   if (dest > 0)
   { // Do not rename x0
@@ -218,24 +217,42 @@ void Processor::stageDecode()
 
 void Processor::flush()
 {
-  cout << "[DEBUG][Flush] called" << '\n';
+  // Clear all execution unit reservation stations and pipelines
+  for (auto &unit : units)
+  {
+    unit.flush();
+  }
+  // Clear LSQ
+  lsq->flush();
+
+  // Reset ROB
+  rob_end = rob_start;
+
+  // Clear RAT (all registers point back to ARF)
+  for (auto &rat_entry : RAT)
+  {
+    rat_entry.isValid = false;
+    rat_entry.tag = -1;
+  }
+
+  // Clear CDB
+  for (auto &cdb_entry : CDB)
+  {
+    cdb_entry.valid = false;
+  }
+
+  // Clear fetched instruction
+  fetched_instr.fetched = false;
 }
 
 void Processor::stageExecuteAndBroadcast()
 {
-  cout << "[DEBUG][Execute] begin" << '\n';
   // calls for execution in all units and lsq and then broadcasts the ready results
   for (auto &unit : units)
   {
-    cout << "[DEBUG] Broadcasting for unit=" << static_cast<int>(unit.name) << '\n';
     unit.executeCycle();
-    cout << "[DEBUG] Cycle executed" << "\n";
     if (unit.has_result)
     {
-      cout << "[DEBUG][Execute] unit=" << static_cast<int>(unit.name)
-           << " result_tag=" << unit.result_tag
-           << " value=" << unit.result_val
-           << " exception=" << unit.has_exception << '\n';
       CDBEntry cdb_entry;
       cdb_entry.tag = unit.result_tag;
       cdb_entry.value = unit.result_val;
@@ -266,9 +283,6 @@ void Processor::stageExecuteAndBroadcast()
   lsq->executeCycle(Memory);
   if (lsq->has_result)
   {
-    cout << "[DEBUG][Execute] lsq result_tag=" << lsq->result_tag
-         << " value=" << lsq->result_val
-         << " exception=" << lsq->has_exception << '\n';
     CDBEntry cdb_entry;
     cdb_entry.tag = lsq->result_tag;
     cdb_entry.value = lsq->result_val;
@@ -278,22 +292,25 @@ void Processor::stageExecuteAndBroadcast()
   }
 
   broadcastOnCDB();
+
+  // Dispatch newly-ready instructions AFTER broadcast so captured values are available
+  for (auto &unit : units)
+  {
+    unit.dispatchReady();
+  }
 }
 
 void Processor::broadcastOnCDB()
 {
-  cout << "[DEBUG][CDB] broadcast begin" << '\n';
   for (auto &entry : CDB)
   {
     if (!entry.valid)
     {
-      cout << "[DEBUG][CDB] entry invalid, skipping" << '\n';
       continue;
     }
     int tag = entry.tag;
     int value = entry.value;
-    bool exception = entry.exception;
-    cout << "[DEBUG][CDB] tag=" << tag << " value=" << value << " exception=" << exception << '\n';
+    bool exc = entry.exception;
     entry.valid = false; // Mark as consumed
     for (auto &unit : units)
     {
@@ -301,32 +318,22 @@ void Processor::broadcastOnCDB()
     }
     lsq->capture(tag, value);
 
-    cout << "[DEBUG][CDB] updating ROB tag=" << tag << " value=" << value << " exception=" << exception << '\n';
     ROB[tag].ready_bit = true;
     ROB[tag].value = value;
-
-    // If there was an exception, set the processor's exception bit
-    if (exception)
-    {
-      this->exception = true;
-    }
+    ROB[tag].exception = exc;
   }
 }
 
 bool Processor::step()
 {
+  if (exception)
+    return false;
+
   clock_cycle++;
-  cout << "[DEBUG][step] cycle " << clock_cycle << " start" << '\n';
-  stageDecode();
-  stageFetch();
   stageExecuteAndBroadcast();
   stageCommit();
-
-  cout << "[DEBUG][step] cycle " << clock_cycle
-       << " end pc=" << pc
-       << " rob_start=" << rob_start
-       << " rob_end=" << rob_end
-       << " exception=" << exception << '\n';
+  stageDecode();
+  stageFetch();
 
   return (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_end != rob_start);
 }
@@ -342,7 +349,7 @@ void Processor::dumpArchitecturalState()
   }
   if (exception)
   {
-    std::cout << "EXCEPTION raised by instruction " << pc + 1 << std::endl;
+    std::cout << "EXCEPTION raised by instruction " << exception_pc / 4 + 1 << std::endl;
   }
   std::cout << "Branch Predictor Stats: " << bp.correct_predictions << "/" << bp.total_branches << " correct.\n";
 }
@@ -366,13 +373,13 @@ void Processor::stageCommit()
     return;
   }
 
-  if (exception)
+  // Check if this ROB entry has an exception
+  if (entry.exception)
   {
-    std::cout << "[DEBUG][Commit] exception detected, flushing" << '\n';
-    flush();
-    // need to go back to the last pc state before exception was encountered and
-    // need to halt the program
-    pc = pc_last_executed;
+    std::cout << "[DEBUG][Commit] exception detected at tag=" << rob_start << '\n';
+    this->exception = true;
+    this->exception_pc = entry.pc_entry;
+    // Do NOT commit this entry — just halt
     return;
   }
 
@@ -398,9 +405,29 @@ void Processor::stageCommit()
   Instruction &committed_instr = inst_memory[entry.pc_entry / 4];
   if (committed_instr.op == OpCode::BEQ || committed_instr.op == OpCode::BNE || committed_instr.op == OpCode::BLT || committed_instr.op == OpCode::BLE)
   {
-    bool taken = (entry.value != 0); // Assuming non-zero means taken for branches
-    int actual_target = entry.pc_entry + committed_instr.imm * 4;
-    bool was_correct = (taken && actual_target == pc) || (!taken && actual_target != pc);
-    bp.update(entry.pc_entry, actual_target, taken, was_correct);
+    bool taken = (entry.value != 0);
+    int branch_pc = entry.pc_entry;
+    int actual_next_pc;
+    if (taken)
+    {
+      actual_next_pc = branch_pc + committed_instr.imm * 4;
+    }
+    else
+    {
+      actual_next_pc = branch_pc + 4;
+    }
+
+    bool was_correct = (actual_next_pc == entry.predicted_next_pc);
+    bp.update(branch_pc, actual_next_pc, taken, was_correct);
+
+    if (!was_correct)
+    {
+      std::cout << "[DEBUG][Commit] branch misprediction at PC=" << branch_pc
+                << " predicted=" << entry.predicted_next_pc
+                << " actual=" << actual_next_pc << '\n';
+      // Flush pipeline and redirect PC
+      flush();
+      pc = actual_next_pc;
+    }
   }
 }

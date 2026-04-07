@@ -17,14 +17,11 @@ int main(int argc, char *argv[])
   {
     max_cycles = stoi(argv[3]);
   }
-  cout << "[DEBUG][main] input file: " << argv[1] << '\n';
   if (max_cycles == -1)
   {
-    cout << "[DEBUG][main] cycle cap disabled" << '\n';
   }
   else
   {
-    cout << "[DEBUG][main] cycle cap: " << max_cycles << '\n';
   }
 
   ProcessorConfig config;
@@ -44,10 +41,6 @@ int main(int argc, char *argv[])
   while (cpu.step())
   {
     cycle_count++;
-    cout << "[DEBUG][main] finished cycle " << cycle_count
-         << " | exception=" << cpu.exception
-         << " | pc=" << cpu.pc
-         << " | clock_cycle=" << cpu.clock_cycle << '\n';
     if (max_cycles != -1 && cycle_count == max_cycles)
     {
       cout << "\n[!] Execution halted at cycle limit: " << max_cycles << "\n";

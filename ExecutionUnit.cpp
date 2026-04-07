@@ -10,9 +10,6 @@ ExecutionUnit::ExecutionUnit(UnitType tname, int lat, int rs_capacity)
   capacity = rs_capacity;
   RS.resize(rs_capacity);
   instr_list.resize(lat, -1);
-  cout << "[DEBUG][ExecutionUnit] created unit=" << static_cast<int>(name)
-       << " latency=" << latency
-       << " rs_capacity=" << capacity << '\n';
 }
 
 int ExecutionUnit::findFreeEntry()
@@ -39,7 +36,6 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   const RATEntry &r = RAT[reg];
   if (!(r.tag == -1))
   {
-    cout << "Yaha enter ho rhaaTT" << '\n';
     out_tag = r.tag;
     out_ready = false;
     out_val = 0;
@@ -91,13 +87,12 @@ void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::
   if (!has_space())
   {
     // Should not happen if has_space() checked
-    cout << "[DEBUG][ExecutionUnit] no RS space for rob_index=" << rob_index << '\n';
     return;
   }
   int ind = findFreeEntry();
   RS[ind] = RSEntry(instr.op, rob_index, v1, t1, r1, v2, t2, r2, true);
-  cout << "[DEBUG][ExecutionUnit] queued op=" << static_cast<int>(instr.op)
-       << " in RS[" << ind << "] for rob_index=" << rob_index << '\n';
+  static unsigned long long seq_counter = 0;
+  RS[ind].seq_num = ++seq_counter;
 }
 
 void ExecutionUnit::capture(int tag, int val)
@@ -132,8 +127,18 @@ int ExecutionUnit::helper(OpCode op, int val1, int val2)
   case OpCode::MUL:
     return val1 * val2;
   case OpCode::DIV:
+    if (val2 == 0)
+    {
+      has_exception = true;
+      return 0;
+    }
     return val1 / val2;
   case OpCode::REM:
+    if (val2 == 0)
+    {
+      has_exception = true;
+      return 0;
+    }
     return val1 % val2;
   case OpCode::SLT:
   case OpCode::SLTI:
@@ -147,6 +152,16 @@ int ExecutionUnit::helper(OpCode op, int val1, int val2)
   case OpCode::XOR:
   case OpCode::XORI:
     return val1 ^ val2;
+  case OpCode::BEQ:
+    return (val1 == val2) ? 1 : 0;
+  case OpCode::BNE:
+    return (val1 != val2) ? 1 : 0;
+  case OpCode::BLT:
+    return (val1 < val2) ? 1 : 0;
+  case OpCode::BLE:
+    return (val1 <= val2) ? 1 : 0;
+  case OpCode::J:
+    return 1; // unconditional jump is always "taken"
   default:
     return 0;
   }
@@ -156,18 +171,14 @@ void ExecutionUnit::executeCycle()
 {
   has_result = false;
   has_exception = false;
-  cout << "[DEBUG][ExecutionUnit] executeCycle unit=" << static_cast<int>(name) << '\n';
   if (instr_list[latency - 1] != -1)
   {
     int idx = instr_list[latency - 1];
-    cout << "[DEBUG][ExecutionUnit] checking RS[" << idx << "] for completion" << '\n';
     has_result = true;
     result_tag = RS[idx].dest_tag;
     // Compute result based on opcode and operand values
     result_val = helper(RS[idx].opcode, RS[idx].val1, RS[idx].val2);
     RS[idx].isValid = false; // Mark the entry as done
-    // now sets the corresponding ROB entry to 1
-    RS[idx].dispatched = true;
   }
 
   for (int i = latency - 2; i >= 0; i--)
@@ -176,14 +187,19 @@ void ExecutionUnit::executeCycle()
   }
 
   instr_list[0] = -1;
+}
+
+void ExecutionUnit::dispatchReady()
+{
+  if (instr_list[0] != -1)
+    return; // Pipeline slot 0 already occupied
 
   for (int i = 0; i < capacity; i++)
   {
-    cout << "[DEBUG][ExecutionUnit] checking RS[" << i << "] isValid=" << RS[i].isValid << " ready1=" << RS[i].ready1 << " ready2=" << RS[i].ready2 << '\n';
-    if (RS[i].isValid && RS[i].ready1 && RS[i].ready2)
+    if (RS[i].isValid && RS[i].ready1 && RS[i].ready2 && !RS[i].dispatched)
     {
       instr_list[0] = i;
-      cout << "[DEBUG][ExecutionUnit] dispatch RS[" << i << "]" << '\n';
+      RS[i].dispatched = true; // Mark as dispatched to prevent re-dispatch
       break;
     }
   }
@@ -194,6 +210,11 @@ void ExecutionUnit::flush()
   for (int i = 0; i < capacity; ++i)
   {
     RS[i].isValid = false;
+    RS[i].dispatched = false;
+  }
+  for (int i = 0; i < latency; ++i)
+  {
+    instr_list[i] = -1;
   }
   has_result = false;
   has_exception = false;

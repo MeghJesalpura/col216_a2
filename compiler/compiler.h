@@ -42,6 +42,7 @@ public:
   RISCVCompiler();
   void compile(const std::string &riscv_code, const std::string &out_filename);
   std::vector<Instruction> getInstructions();
+  std::vector<int> getDataWords() { return data_words; }
 
 private:
   std::vector<int> data_words;
