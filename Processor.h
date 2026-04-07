@@ -13,8 +13,6 @@
 class Processor
 {
 private:
-    bool createRSEntry(Instruction &instr, int rob_index);
-
 public:
     int pc;
     int clock_cycle;

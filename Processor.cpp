@@ -1,43 +1,5 @@
 #include "Processor.h"
 
-Processor::createRSEntry(Instruction &instr, int rob_index)
-{
-    if (instr.op == OpCode::ADD || instr.op == OpCode::SUB || instr.op == OpCode::ADDI)
-    {
-        if (!units[0].has_space())
-            return false;
-        // create entry in adder reservation station
-    }
-    else if (instr.op == OpCode::MUL)
-    {
-        if (!units[1].has_space())
-            return false;
-        // create entry in multiplier reservation station
-    }
-    else if (instr.op == OpCode::DIV || instr.op == OpCode::REM)
-    {
-        if (!units[2].has_space())
-            return false;
-        // create entry in divider reservation station
-    }
-    else if (instr.op == OpCode::BEQ || instr.op == OpCode::BNE || instr.op == OpCode::BLT || instr.op == OpCode::BLE)
-    {
-        if (!units[3].has_space())
-            return false;
-        // create entry in branch comparison reservation station
-    }
-    else if (instr.op == OpCode::AND || instr.op == OpCode::OR || instr.op == OpCode::XOR || instr.op == OpCode::ANDI || instr.op == OpCode::ORI || instr.op == OpCode::XORI)
-    {
-        if (!units[4].has_space())
-            return false;
-    }
-    else if (instr.op == OpCode::LW || instr.op == OpCode::SW)
-    {
-        if (!lsq->has_space())
-            return false;
-    }
-}
-
 Processor::Processor(ProcessorConfig &config)
 {
     pc = 0;
