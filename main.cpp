@@ -6,59 +6,72 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    if (argc < 2)
-    {
-        cerr << "Usage: ./main <filename.s> [-cycles N]\n";
-        return 1;
-    }
+  if (argc < 2)
+  {
+    cerr << "Usage: ./main <filename.s> [-cycles N]\n";
+    return 1;
+  }
 
-    int max_cycles = -1;
-    if (argc == 4 && string(argv[2]) == "-cycles")
-    {
-        max_cycles = stoi(argv[3]);
-    }
+  int max_cycles = -1;
+  if (argc == 4 && string(argv[2]) == "-cycles")
+  {
+    max_cycles = stoi(argv[3]);
+  }
+  cout << "[DEBUG][main] input file: " << argv[1] << '\n';
+  if (max_cycles == -1)
+  {
+    cout << "[DEBUG][main] cycle cap disabled" << '\n';
+  }
+  else
+  {
+    cout << "[DEBUG][main] cycle cap: " << max_cycles << '\n';
+  }
 
-    ProcessorConfig config;
-    Processor cpu = Processor(config);
+  ProcessorConfig config;
+  Processor cpu = Processor(config);
 
-    try
-    {
-        cpu.loadProgram(argv[1]);
-    }
-    catch (...)
-    {
-        cerr << "Failed to parse instruction file.\n";
-        return 1;
-    }
+  try
+  {
+    cpu.loadProgram(argv[1]);
+  }
+  catch (...)
+  {
+    cerr << "Failed to parse instruction file.\n";
+    return 1;
+  }
 
-    int cycle_count = 0;
-    while (cpu.step())
+  int cycle_count = 0;
+  while (cpu.step())
+  {
+    cycle_count++;
+    cout << "[DEBUG][main] finished cycle " << cycle_count
+         << " | exception=" << cpu.exception
+         << " | pc=" << cpu.pc
+         << " | clock_cycle=" << cpu.clock_cycle << '\n';
+    if (max_cycles != -1 && cycle_count == max_cycles)
     {
-        cycle_count++;
-        if (max_cycles != -1 && cycle_count == max_cycles)
-        {
-            cout << "\n[!] Execution halted at cycle limit: " << max_cycles << "\n";
-            break;
-        }
+      cout << "\n[!] Execution halted at cycle limit: " << max_cycles << "\n";
+      break;
     }
+  }
 
-    if (max_cycles == -1)
+  if (max_cycles == -1)
+  {
+    if (cpu.exception)
     {
-        if (cpu.exception)
-        {
-            cout << "\n[+] Execution halted due to exception after " << cpu.clock_cycle << " cycles.\n";
-        }
-        else
-        {
-            cout << "\n[+] Execution complete naturally in " << cpu.clock_cycle << " cycles.\n";
-        }
+      cout << "\n[+] Execution halted due to exception after " << cpu.clock_cycle << " cycles.\n";
     }
+    else
+    {
+      cout << "\n[+] Execution complete naturally in " << cpu.clock_cycle << " cycles.\n";
+    }
+  }
 
-    cpu.dumpArchitecturalState();
-    for (long unsigned int i = 0; i < cpu.Memory.size(); i++)
-    {
-        cout << cpu.Memory[i] << " ";
-    }
-    cout << endl;
-    return 0;
+  cpu.dumpArchitecturalState();
+  for (long unsigned int i = 0; i < cpu.Memory.size(); i++)
+  {
+    cout << cpu.Memory[i] << " ";
+  }
+  cout << endl;
+  return 0;
 }

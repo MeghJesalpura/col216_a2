@@ -1,6 +1,8 @@
 #include "Basics.h"
 #include "ExecutionUnit.h"
 
+using std::cout;
+
 ExecutionUnit::ExecutionUnit(UnitType tname, int lat, int rs_capacity)
 {
   name = tname;
@@ -8,6 +10,9 @@ ExecutionUnit::ExecutionUnit(UnitType tname, int lat, int rs_capacity)
   capacity = rs_capacity;
   RS.resize(rs_capacity);
   instr_list.resize(lat, -1);
+  cout << "[DEBUG][ExecutionUnit] created unit=" << static_cast<int>(name)
+       << " latency=" << latency
+       << " rs_capacity=" << capacity << '\n';
 }
 
 int ExecutionUnit::findFreeEntry()
@@ -32,8 +37,9 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   }
 
   const RATEntry &r = RAT[reg];
-  if (!r.isValid)
+  if (!(r.tag == -1))
   {
+    cout << "Yaha enter ho rhaaTT" << '\n';
     out_tag = r.tag;
     out_ready = false;
     out_val = 0;
@@ -85,10 +91,13 @@ void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::
   if (!has_space())
   {
     // Should not happen if has_space() checked
+    cout << "[DEBUG][ExecutionUnit] no RS space for rob_index=" << rob_index << '\n';
     return;
   }
   int ind = findFreeEntry();
   RS[ind] = RSEntry(instr.op, rob_index, v1, t1, r1, v2, t2, r2, true);
+  cout << "[DEBUG][ExecutionUnit] queued op=" << static_cast<int>(instr.op)
+       << " in RS[" << ind << "] for rob_index=" << rob_index << '\n';
 }
 
 void ExecutionUnit::capture(int tag, int val)
@@ -147,9 +156,11 @@ void ExecutionUnit::executeCycle()
 {
   has_result = false;
   has_exception = false;
+  cout << "[DEBUG][ExecutionUnit] executeCycle unit=" << static_cast<int>(name) << '\n';
   if (instr_list[latency - 1] != -1)
   {
     int idx = instr_list[latency - 1];
+    cout << "[DEBUG][ExecutionUnit] checking RS[" << idx << "] for completion" << '\n';
     has_result = true;
     result_tag = RS[idx].dest_tag;
     // Compute result based on opcode and operand values
@@ -168,9 +179,11 @@ void ExecutionUnit::executeCycle()
 
   for (int i = 0; i < capacity; i++)
   {
+    cout << "[DEBUG][ExecutionUnit] checking RS[" << i << "] isValid=" << RS[i].isValid << " ready1=" << RS[i].ready1 << " ready2=" << RS[i].ready2 << '\n';
     if (RS[i].isValid && RS[i].ready1 && RS[i].ready2)
     {
       instr_list[0] = i;
+      cout << "[DEBUG][ExecutionUnit] dispatch RS[" << i << "]" << '\n';
       break;
     }
   }

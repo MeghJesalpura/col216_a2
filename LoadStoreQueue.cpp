@@ -1,5 +1,7 @@
 #include "LoadStoreQueue.h"
 
+using std::cout;
+
 LoadStoreQueue::LoadStoreQueue(int latency, int lsq_capacity) : latency(latency), lsq_capacity(lsq_capacity), lsq_filled(0) {}
 
 bool LoadStoreQueue::has_space()
@@ -9,6 +11,7 @@ bool LoadStoreQueue::has_space()
 
 void LoadStoreQueue::capture(int tag, int val)
 {
+  cout << "[DEBUG][LSQ] capture tag=" << tag << " val=" << val << '\n';
   for (auto &entry : q)
   {
     if (!entry.addr_ready && entry.addr_tag == tag)
@@ -29,6 +32,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 {
   has_result = false;
   has_exception = false;
+  cout << "[DEBUG][LSQ] executeCycle size=" << q.size() << '\n';
 
   if (q.empty())
     return;
@@ -45,7 +49,10 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
   LSQEntry &entry = *it;
 
   if (!entry.addr_ready)
+  {
+    cout << "[DEBUG][LSQ] head address not ready" << '\n';
     return;
+  }
 
   if (!entry.dispatched)
   {
@@ -95,6 +102,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
     if (!entry.broadcasted)
     {
+      cout << "[DEBUG][LSQ] load complete tag=" << entry.dest_tag << " value=" << loaded_val << '\n';
       has_result = true;
       has_exception = false;
       result_tag = entry.dest_tag;
@@ -126,6 +134,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
     if (!entry.broadcasted)
     {
+      cout << "[DEBUG][LSQ] store complete tag=" << entry.dest_tag << " addr=" << eff_addr << '\n';
       has_result = true;
       has_exception = false;
       result_tag = entry.dest_tag;
@@ -139,6 +148,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
 
 void LoadStoreQueue::commitEntry(int tag, std::vector<int> &Memory)
 {
+  cout << "[DEBUG][LSQ] commitEntry tag=" << tag << '\n';
   if (!q.empty() && q.front().dest_tag == tag)
   {
     if (q.front().type == LSQEntryType::STORE && !q.front().exception)
@@ -155,18 +165,28 @@ void LoadStoreQueue::commitEntry(int tag, std::vector<int> &Memory)
 
 void LoadStoreQueue::createLSQEntry(const Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, std::vector<ROBEntry> &ROB)
 {
+  cout << "[DEBUG][LSQ] enqueue op=" << static_cast<int>(instr.op)
+       << " rob_index=" << rob_index << '\n';
   LSQEntry entry;
   entry.type = (instr.op == OpCode::LW) ? LSQEntryType::LOAD : LSQEntryType::STORE;
   entry.dest_tag = rob_index;
 
   int addr_val = 0, addr_tag = -1;
   bool addr_ready = true;
-  if (instr.src1 >= 0 && instr.src1 < static_cast<int>(RAT.size())) {
-    if (RAT[instr.src1].isValid) {
+  if (instr.src1 >= 0 && instr.src1 < static_cast<int>(RAT.size()))
+  {
+    if (RAT[instr.src1].isValid)
+    {
       addr_tag = RAT[instr.src1].tag;
       addr_ready = false;
-      if (ROB[addr_tag].ready_bit) { addr_ready = true; addr_val = ROB[addr_tag].value; }
-    } else {
+      if (ROB[addr_tag].ready_bit)
+      {
+        addr_ready = true;
+        addr_val = ROB[addr_tag].value;
+      }
+    }
+    else
+    {
       addr_val = ARF[instr.src1];
     }
   }
@@ -177,18 +197,27 @@ void LoadStoreQueue::createLSQEntry(const Instruction &instr, int rob_index, con
 
   int data_val = 0, data_tag = -1;
   bool data_ready = true;
-  if (entry.type == LSQEntryType::STORE) {
-    if (instr.src2 >= 0 && instr.src2 < static_cast<int>(RAT.size())) {
-      if (RAT[instr.src2].isValid) {
+  if (entry.type == LSQEntryType::STORE)
+  {
+    if (instr.src2 >= 0 && instr.src2 < static_cast<int>(RAT.size()))
+    {
+      if (RAT[instr.src2].isValid)
+      {
         data_tag = RAT[instr.src2].tag;
         data_ready = false;
-        if (ROB[data_tag].ready_bit) { data_ready = true; data_val = ROB[data_tag].value; }
-      } else {
+        if (ROB[data_tag].ready_bit)
+        {
+          data_ready = true;
+          data_val = ROB[data_tag].value;
+        }
+      }
+      else
+      {
         data_val = ARF[instr.src2];
       }
     }
   }
-  
+
   entry.data_tag = data_tag;
   entry.data_val = data_val;
   entry.data_ready = data_ready;
