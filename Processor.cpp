@@ -12,6 +12,7 @@ Processor::Processor(ProcessorConfig &config)
   ROB.resize(config.rob_size);
   rob_capacity = config.rob_size;
   RAT.resize(config.num_regs);
+  CDB.resize(6);
 
   // Instantiate Hardware Units
   // Adder
@@ -55,6 +56,11 @@ void Processor::loadProgram(const std::string &filename)
 
 void Processor::stageFetch()
 {
+  if (pc >= static_cast<int>(inst_memory.size() * 4) && rob_end == rob_start)
+  {
+    terminated = true;
+    return;
+  }
   if (pc < 0 || pc / 4 >= static_cast<int>(inst_memory.size()))
   {
     fetched_instr.fetched = false;

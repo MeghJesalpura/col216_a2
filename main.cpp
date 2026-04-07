@@ -18,6 +18,8 @@ int main(int argc, char *argv[])
         max_cycles = stoi(argv[3]);
     }
 
+    max_cycles = 20;
+
     ProcessorConfig config;
     Processor cpu = Processor(config);
 
@@ -32,7 +34,7 @@ int main(int argc, char *argv[])
     }
 
     int cycle_count = 0;
-    while (cpu.step())
+    while (!cpu.terminated && cpu.step())
     {
         cycle_count++;
         if (max_cycles != -1 && cycle_count == max_cycles)

@@ -10,8 +10,9 @@ CXXFLAGS = -std=c++17 -Wall
 # and will have its own main() function.
 compile:
 	@echo "Compiling simulator:"
-	$(CXX) $(CXXFLAGS) -DSIMULATOR main.cpp Processor.cpp ExecutionUnit.cpp LoadStoreQueue.cpp compiler/compiler.cpp -o main
+	$(CXX) $(CXXFLAGS) -DSIMULATOR -g -O0 main.cpp Processor.cpp ExecutionUnit.cpp LoadStoreQueue.cpp compiler/compiler.cpp -o main
 	@echo "Build successful, 'main' created."
+	./main programs/code1.txt
 
 # ==========================================
 # make run FILE=<filename.s>

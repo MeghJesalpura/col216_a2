@@ -32,7 +32,7 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   }
 
   const RATEntry &r = RAT[reg];
-  if (!r.isValid)
+  if (r.isValid)
   {
     out_tag = r.tag;
     out_ready = false;
@@ -145,6 +145,8 @@ int ExecutionUnit::helper(OpCode op, int val1, int val2)
 
 void ExecutionUnit::executeCycle()
 {
+  has_result = false;
+  has_exception = false;
   if (instr_list[latency - 1] != -1)
   {
     int idx = instr_list[latency - 1];
@@ -156,10 +158,13 @@ void ExecutionUnit::executeCycle()
     // now sets the corresponding ROB entry to 1
     RS[idx].dispatched = true;
   }
+
   for (int i = latency - 2; i >= 0; i--)
   {
     instr_list[i + 1] = instr_list[i];
   }
+
+  instr_list[0] = -1;
 
   for (int i = 0; i < capacity; i++)
   {

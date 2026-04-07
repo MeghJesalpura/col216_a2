@@ -19,6 +19,8 @@ public:
     int pc;
     int clock_cycle;
     int curr_tag;
+
+    bool terminated = false;
     // pipeline registers
 
     std::vector<Instruction> inst_memory;
