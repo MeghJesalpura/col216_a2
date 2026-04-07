@@ -54,6 +54,7 @@ public:
 
   bool has_space();
   void capture(int tag, int val);
+  void createLSQEntry(const Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, std::vector<ROBEntry> &ROB);
   void executeCycle(std::vector<int> &Memory);
 
   void commitEntry(int tag, std::vector<int> &Memory);

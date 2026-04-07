@@ -70,14 +70,17 @@ struct ProcessorConfig
 struct ROBEntry
 {
     bool valid_bit = false;
-    bool ready_bit;
-    int reg_id;
-    ROBEntry() : valid_bit(false), ready_bit(false), reg_id(0) {}
+    bool ready_bit = false;
+    int reg_id = 0;
+    int value = 0;
+
+    ROBEntry() : valid_bit(false), ready_bit(false), reg_id(0), value(0) {}
     ROBEntry(bool tvalid, bool tready, int id)
     {
         valid_bit = tvalid;
         ready_bit = tready;
         reg_id = id;
+        value = 0;
     }
 };
 

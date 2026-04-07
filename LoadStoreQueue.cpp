@@ -153,6 +153,58 @@ void LoadStoreQueue::commitEntry(int tag, std::vector<int> &Memory)
   }
 }
 
+void LoadStoreQueue::createLSQEntry(const Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, std::vector<ROBEntry> &ROB)
+{
+  LSQEntry entry;
+  entry.type = (instr.op == OpCode::LW) ? LSQEntryType::LOAD : LSQEntryType::STORE;
+  entry.dest_tag = rob_index;
+
+  int addr_val = 0, addr_tag = -1;
+  bool addr_ready = true;
+  if (instr.src1 >= 0 && instr.src1 < static_cast<int>(RAT.size())) {
+    if (RAT[instr.src1].isValid) {
+      addr_tag = RAT[instr.src1].tag;
+      addr_ready = false;
+      if (ROB[addr_tag].ready_bit) { addr_ready = true; addr_val = ROB[addr_tag].value; }
+    } else {
+      addr_val = ARF[instr.src1];
+    }
+  }
+  entry.addr_tag = addr_tag;
+  entry.addr_val = addr_val;
+  entry.addr_ready = addr_ready;
+  entry.offset = instr.imm;
+
+  int data_val = 0, data_tag = -1;
+  bool data_ready = true;
+  if (entry.type == LSQEntryType::STORE) {
+    if (instr.src2 >= 0 && instr.src2 < static_cast<int>(RAT.size())) {
+      if (RAT[instr.src2].isValid) {
+        data_tag = RAT[instr.src2].tag;
+        data_ready = false;
+        if (ROB[data_tag].ready_bit) { data_ready = true; data_val = ROB[data_tag].value; }
+      } else {
+        data_val = ARF[instr.src2];
+      }
+    }
+  }
+  
+  entry.data_tag = data_tag;
+  entry.data_val = data_val;
+  entry.data_ready = data_ready;
+
+  entry.dispatched = false;
+  entry.cycles_left = 0;
+  entry.done = false;
+  entry.broadcasted = false;
+  entry.result = 0;
+  entry.exception = false;
+  entry.eff_addr = 0;
+
+  q.push_back(entry);
+  lsq_filled++;
+}
+
 void LoadStoreQueue::flush()
 {
   q.clear();

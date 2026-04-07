@@ -26,7 +26,7 @@ public:
 
     ExecutionUnit(UnitType tname, int latency, int rs_capacity);
     bool has_space();
-    void createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF);
+    void createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB);
     void capture(int tag, int val);
     void executeCycle();
     void flush();

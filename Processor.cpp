@@ -55,8 +55,76 @@ void Processor::loadProgram(const std::string &filename)
 
 void Processor::stageFetch()
 {
+    if (pc < 0 || pc / 4 >= static_cast<int>(inst_memory.size()))
+    {
+        fetched_instr.fetched = false;
+        return;
+    }
+
     fetched_instr = inst_memory[pc / 4];
+    fetched_instr.pc = pc; // Ensure PC is stored in instruction
     fetched_instr.fetched = true;
+
+    bool is_branch = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
+                      fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
+
+    if (is_branch)
+    {
+        if (bp.predict(pc, fetched_instr.imm, fetched_instr.op))
+        {
+            pc = pc + fetched_instr.imm * 4;
+        }
+        else
+        {
+            pc = pc + 4;
+        }
+    }
+    else if (fetched_instr.op == OpCode::J)
+    {
+        pc = pc + fetched_instr.imm * 4;
+    }
+    else
+    {
+        pc = pc + 4;
+    }
+}
+
+int Processor::selectUnitForOpcode(const Instruction &instr, bool &is_lsq)
+{
+    is_lsq = false;
+    switch (instr.op)
+    {
+    case OpCode::ADD:
+    case OpCode::SUB:
+    case OpCode::ADDI:
+        return 0;
+    case OpCode::MUL:
+        return 1;
+    case OpCode::DIV:
+    case OpCode::REM:
+        return 2;
+    case OpCode::BEQ:
+    case OpCode::BNE:
+    case OpCode::BLT:
+    case OpCode::BLE:
+    case OpCode::J:
+        return 3;
+    case OpCode::SLT:
+    case OpCode::SLTI:
+    case OpCode::AND:
+    case OpCode::OR:
+    case OpCode::XOR:
+    case OpCode::ANDI:
+    case OpCode::ORI:
+    case OpCode::XORI:
+        return 4;
+    case OpCode::LW:
+    case OpCode::SW:
+        is_lsq = true;
+        return -1;
+    default:
+        return -1;
+    }
 }
 
 void Processor::stageDecode()
@@ -64,19 +132,57 @@ void Processor::stageDecode()
     if (!fetched_instr.fetched)
         return;
 
-    if (rob_capacity == (rob_end + rob_capacity - rob_start) % rob_capacity)
+    bool is_lsq = false;
+    int unit_idx = selectUnitForOpcode(fetched_instr, is_lsq);
+
+    if (is_lsq)
+    {
+        if (!lsq->has_space())
+            return;
+    }
+    else if (unit_idx != -1)
+    {
+        if (!units[unit_idx].has_space())
+            return;
+    }
+    else
+    {
+        return;
+    }
+
+    if ((rob_end + 1) % rob_capacity == rob_start)
         return;
 
-    // need to also check if the corresponding reservation station has space or not
-    // if ()
+    int rob_index = rob_end;
 
-    ROBEntry rob_entry(true, false, fetched_instr.dest);
-    curr_tag = (curr_tag + 1) % rob_capacity;
+    if (is_lsq)
+    {
+        lsq->createLSQEntry(fetched_instr, rob_index, RAT, ARF, ROB);
+    }
+    else
+    {
+        units[unit_idx].createRSEntry(fetched_instr, rob_index, RAT, ARF, ROB);
+    }
+
+    int dest = fetched_instr.dest;
+    if (fetched_instr.op == OpCode::SW || fetched_instr.op == OpCode::BEQ ||
+        fetched_instr.op == OpCode::BNE || fetched_instr.op == OpCode::BLT ||
+        fetched_instr.op == OpCode::BLE || fetched_instr.op == OpCode::J)
+    {
+        dest = -1;
+    }
+
+    ROBEntry rob_entry(true, false, dest);
     ROB[rob_end] = rob_entry;
     rob_end = (rob_end + 1) % rob_capacity;
 
-    RATEntry rat_entry(-1, curr_tag, false);
-    RAT[fetched_instr.dest] = rat_entry;
+    if (dest > 0)
+    { // Do not rename x0
+        RATEntry rat_entry(0, rob_index, true);
+        RAT[dest] = rat_entry;
+    }
+
+    fetched_instr.fetched = false;
 }
 
 void Processor::flush()

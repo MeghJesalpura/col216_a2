@@ -13,6 +13,7 @@
 class Processor
 {
 private:
+    int selectUnitForOpcode(const Instruction &instr, bool &is_lsq);
 public:
     int pc;
     int clock_cycle;

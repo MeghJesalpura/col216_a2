@@ -29,7 +29,7 @@ int ExecutionUnit::get_rs_filled()
   return (tail - head + capacity) % capacity + 1;
 }
 
-void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, int &out_val, int &out_tag, bool &out_ready)
+void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB, int &out_val, int &out_tag, bool &out_ready)
 {
   if (reg < 0 || reg >= static_cast<int>(RAT.size()))
   {
@@ -42,9 +42,13 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   const RATEntry &r = RAT[reg];
   if (r.isValid)
   {
-    out_val = 0;
     out_tag = r.tag;
     out_ready = false;
+    out_val = 0;
+    if (ROB[r.tag].ready_bit) {
+        out_ready = true;
+        out_val = ROB[r.tag].value;
+    }
   }
   else
   {
@@ -59,12 +63,12 @@ bool ExecutionUnit::has_space()
   return get_rs_filled() < capacity;
 }
 
-void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF)
+void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB)
 {
   int v1, t1, v2, t2;
   bool r1, r2;
 
-  resolveOperand(instr.src1, RAT, ARF, v1, t1, r1);
+  resolveOperand(instr.src1, RAT, ARF, ROB, v1, t1, r1);
 
   bool is_immediate = (instr.op == OpCode::ADDI ||
                        instr.op == OpCode::SLTI ||
@@ -82,7 +86,7 @@ void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::
   }
   else
   {
-    resolveOperand(instr.src2, RAT, ARF, v2, t2, r2);
+    resolveOperand(instr.src2, RAT, ARF, ROB, v2, t2, r2);
   }
 
   if (get_rs_filled() >= capacity) {
