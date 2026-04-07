@@ -56,11 +56,6 @@ void Processor::loadProgram(const std::string &filename)
 
 void Processor::stageFetch()
 {
-  if (pc >= static_cast<int>(inst_memory.size() * 4) && rob_end == rob_start)
-  {
-    terminated = true;
-    return;
-  }
   if (pc < 0 || pc / 4 >= static_cast<int>(inst_memory.size()))
   {
     fetched_instr.fetched = false;
@@ -207,6 +202,7 @@ void Processor::stageExecuteAndBroadcast()
       cdb_entry.tag = unit.result_tag;
       cdb_entry.value = unit.result_val;
       cdb_entry.exception = unit.has_exception;
+      cdb_entry.valid = true;
       if (unit.name == UnitType::ADDER)
       {
         CDB[0] = cdb_entry;
@@ -236,6 +232,7 @@ void Processor::stageExecuteAndBroadcast()
     cdb_entry.tag = lsq->result_tag;
     cdb_entry.value = lsq->result_val;
     cdb_entry.exception = lsq->has_exception;
+    cdb_entry.valid = true;
     CDB[5] = cdb_entry;
   }
 
@@ -277,7 +274,7 @@ bool Processor::step()
   stageExecuteAndBroadcast();
   stageCommit();
 
-  return true; // return false if CPU has no more to do after this cycle
+  return (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_end != rob_start);
 }
 
 void Processor::dumpArchitecturalState()
@@ -317,10 +314,26 @@ void Processor::stageCommit()
     return;
   }
 
+  // if (entry.reg_id >= 0)
+  // {
   ARF[entry.reg_id] = entry.value;
   if (RAT[entry.reg_id].tag == rob_start)
   {
-    RAT[entry.reg_id].isValid = true;
+    RAT[entry.reg_id].isValid = false; // <- changed to false to indicate committed
     RAT[entry.reg_id].tag = -1;
+  }
+  // }
+
+  lsq->commitEntry(rob_start, Memory);
+  rob_start = (rob_start + 1) % rob_capacity;
+
+  // update branch predictor if this instruction was a branch
+  Instruction &committed_instr = inst_memory[entry.pc_entry / 4];
+  if (committed_instr.op == OpCode::BEQ || committed_instr.op == OpCode::BNE || committed_instr.op == OpCode::BLT || committed_instr.op == OpCode::BLE)
+  {
+    bool taken = (entry.value != 0); // Assuming non-zero means taken for branches
+    int actual_target = entry.pc_entry + committed_instr.imm * 4;
+    bool was_correct = (taken && actual_target == pc) || (!taken && actual_target != pc);
+    bp.update(entry.pc_entry, actual_target, taken, was_correct);
   }
 }

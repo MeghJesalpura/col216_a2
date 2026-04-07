@@ -32,7 +32,7 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   }
 
   const RATEntry &r = RAT[reg];
-  if (r.isValid)
+  if (!r.isValid)
   {
     out_tag = r.tag;
     out_ready = false;

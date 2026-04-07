@@ -143,5 +143,5 @@ struct CDBEntry
   int value;
   bool exception;
   bool valid;
-  CDBEntry() : tag(-1), value(0), exception(false), valid(true) {}
+  CDBEntry() : tag(-1), value(0), exception(false), valid(false) {}
 };
