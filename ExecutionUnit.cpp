@@ -32,7 +32,7 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
   }
 
   const RATEntry &r = RAT[reg];
-  if (r.isValid)
+  if (!r.isValid)
   {
     out_tag = r.tag;
     out_ready = false;
@@ -93,6 +93,22 @@ void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::
 
 void ExecutionUnit::capture(int tag, int val)
 {
+  for (int i = 0; i < capacity; i++)
+  {
+    if (RS[i].isValid)
+    {
+      if (!RS[i].ready1 && RS[i].tag1 == tag)
+      {
+        RS[i].val1 = val;
+        RS[i].ready1 = true;
+      }
+      if (!RS[i].ready2 && RS[i].tag2 == tag)
+      {
+        RS[i].val2 = val;
+        RS[i].ready2 = true;
+      }
+    }
+  }
 }
 
 int ExecutionUnit::helper(OpCode op, int val1, int val2)
@@ -135,14 +151,16 @@ void ExecutionUnit::executeCycle()
     has_result = true;
     result_tag = RS[idx].dest_tag;
     // Compute result based on opcode and operand values
-    // This is a placeholder; actual computation logic should be implemented
     result_val = helper(RS[idx].opcode, RS[idx].val1, RS[idx].val2);
     RS[idx].isValid = false; // Mark the entry as done
+    // now sets the corresponding ROB entry to 1
+    RS[idx].dispatched = true;
   }
   for (int i = latency - 2; i >= 0; i--)
   {
     instr_list[i + 1] = instr_list[i];
   }
+
   for (int i = 0; i < capacity; i++)
   {
     if (RS[i].isValid && RS[i].ready1 && RS[i].ready2)

@@ -14,6 +14,7 @@ class Processor
 {
 private:
     int selectUnitForOpcode(const Instruction &instr, bool &is_lsq);
+
 public:
     int pc;
     int clock_cycle;
@@ -39,6 +40,10 @@ public:
 
     LoadStoreQueue *lsq;
     BranchPredictor bp;
+
+    std::vector<CDBEntry> CDB; // Common Data Bus for broadcasting results from execution units and LSQ
+
+    int pc_last_executed = -1; // To track the last executed instruction's PC for exception handling
 
     Processor(ProcessorConfig &config);
 
