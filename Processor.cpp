@@ -201,7 +201,26 @@ void Processor::stageExecuteAndBroadcast()
       cdb_entry.tag = unit.result_tag;
       cdb_entry.value = unit.result_val;
       cdb_entry.exception = unit.has_exception;
-      CDB.push_back(cdb_entry);
+      if (unit.name == UnitType::ADDER)
+      {
+        CDB[0] = cdb_entry;
+      }
+      else if (unit.name == UnitType::MULTIPLIER)
+      {
+        CDB[1] = cdb_entry;
+      }
+      else if (unit.name == UnitType::DIVIDER)
+      {
+        CDB[2] = cdb_entry;
+      }
+      else if (unit.name == UnitType::BRANCH)
+      {
+        CDB[3] = cdb_entry;
+      }
+      else if (unit.name == UnitType::LOGIC)
+      {
+        CDB[4] = cdb_entry;
+      }
     }
   }
   lsq->executeCycle(Memory);
@@ -211,23 +230,22 @@ void Processor::stageExecuteAndBroadcast()
     cdb_entry.tag = lsq->result_tag;
     cdb_entry.value = lsq->result_val;
     cdb_entry.exception = lsq->has_exception;
-    CDB.push_back(cdb_entry);
+    CDB[5] = cdb_entry;
   }
 
-  if (CDB.size() > 0)
-  {
-    broadcastOnCDB();
-  }
+  broadcastOnCDB();
 }
 
 void Processor::broadcastOnCDB()
 {
-  for (const auto &entry : CDB)
+  for (auto &entry : CDB)
   {
+    if (!entry.valid)
+      continue;
     int tag = entry.tag;
     int value = entry.value;
     bool exception = entry.exception;
-
+    entry.valid = false; // Mark as consumed
     for (auto &unit : units)
     {
       unit.capture(tag, value);

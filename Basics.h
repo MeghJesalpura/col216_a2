@@ -142,8 +142,6 @@ struct CDBEntry
   int tag;
   int value;
   bool exception;
-
-  CDBEntry() : tag(-1), value(0), exception(false) {}
-
-  CDBEntry(int t, int v, bool ex) : tag(t), value(v), exception(ex) {}
-}
+  bool valid;
+  CDBEntry() : tag(-1), value(0), exception(false), valid(true) {}
+};
