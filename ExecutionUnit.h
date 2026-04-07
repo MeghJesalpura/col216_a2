@@ -7,27 +7,27 @@
 
 class ExecutionUnit
 {
+private:
+  int helper(OpCode op, int val1, int val2);
+
 public:
-    std::vector<RSEntry> RS;
-    int head;
-    int tail;
-    int capacity;
+  std::vector<RSEntry> RS;
+  int capacity;
 
-    UnitType name;
-    int latency;
-    int rs_size;
+  UnitType name;
+  int latency;
 
-    int get_rs_filled();
+  int findFreeEntry();
 
-    bool has_result = false;
-    bool has_exception = false;
-    int result_tag = 0;
-    int result_val = 0;
-
-    ExecutionUnit(UnitType tname, int latency, int rs_capacity);
-    bool has_space();
-    void createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB);
-    void capture(int tag, int val);
-    void executeCycle();
-    void flush();
+  bool has_result = false;
+  bool has_exception = false;
+  int result_tag = 0;
+  int result_val = 0;
+  std::vector<int> instr_list;
+  ExecutionUnit(UnitType tname, int latency, int rs_capacity);
+  bool has_space();
+  void createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB);
+  void capture(int tag, int val);
+  void executeCycle();
+  void flush();
 };

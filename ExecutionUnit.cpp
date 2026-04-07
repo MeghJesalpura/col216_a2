@@ -5,28 +5,20 @@ ExecutionUnit::ExecutionUnit(UnitType tname, int lat, int rs_capacity)
 {
   name = tname;
   latency = lat;
-  rs_size = rs_capacity;
   capacity = rs_capacity;
   RS.resize(rs_capacity);
-  head = -1;
-  tail = -1;
+  instr_list.resize(lat, -1);
 }
 
-int ExecutionUnit::get_rs_filled()
+int ExecutionUnit::findFreeEntry()
 {
   // Advance head past any entries that are no longer busy (marked as done)
-  while (head != -1 && !RS[head].busy) {
-    if (head == tail) {
-      // Buffer is completely empty now
-      head = -1;
-      tail = -1;
-      break;
-    }
-    head = (head + 1) % capacity;
+  for (int i = 0; i < capacity; i++)
+  {
+    if (!RS[i].isValid)
+      return i;
   }
-
-  if (head == -1) return 0;
-  return (tail - head + capacity) % capacity + 1;
+  return -1;
 }
 
 void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB, int &out_val, int &out_tag, bool &out_ready)
@@ -45,9 +37,10 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
     out_tag = r.tag;
     out_ready = false;
     out_val = 0;
-    if (ROB[r.tag].ready_bit) {
-        out_ready = true;
-        out_val = ROB[r.tag].value;
+    if (ROB[r.tag].ready_bit)
+    {
+      out_ready = true;
+      out_val = ROB[r.tag].value;
     }
   }
   else
@@ -60,7 +53,7 @@ void resolveOperand(int reg, const std::vector<RATEntry> &RAT, const std::vector
 
 bool ExecutionUnit::has_space()
 {
-  return get_rs_filled() < capacity;
+  return (findFreeEntry() != -1);
 }
 
 void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::vector<RATEntry> &RAT, const std::vector<int> &ARF, const std::vector<ROBEntry> &ROB)
@@ -89,39 +82,83 @@ void ExecutionUnit::createRSEntry(Instruction &instr, int rob_index, const std::
     resolveOperand(instr.src2, RAT, ARF, ROB, v2, t2, r2);
   }
 
-  if (get_rs_filled() >= capacity) {
+  if (!has_space())
+  {
     // Should not happen if has_space() checked
     return;
   }
-  if (head == -1) {
-    head = 0;
-    tail = 0;
-  } else {
-    tail = (tail + 1) % capacity;
-  }
-
-  RS[tail] = RSEntry(instr.op, rob_index, v1, t1, r1, v2, t2, r2);
-  RS[tail].busy = true;
+  int ind = findFreeEntry();
+  RS[ind] = RSEntry(instr.op, rob_index, v1, t1, r1, v2, t2, r2, true);
 }
 
 void ExecutionUnit::capture(int tag, int val)
 {
 }
 
+int ExecutionUnit::helper(OpCode op, int val1, int val2)
+{
+  switch (op)
+  {
+  case OpCode::ADD:
+  case OpCode::ADDI:
+    return val1 + val2;
+  case OpCode::SUB:
+    return val1 - val2;
+  case OpCode::MUL:
+    return val1 * val2;
+  case OpCode::DIV:
+    return val1 / val2;
+  case OpCode::REM:
+    return val1 % val2;
+  case OpCode::SLT:
+  case OpCode::SLTI:
+    return (val1 < val2);
+  case OpCode::AND:
+  case OpCode::ANDI:
+    return val1 & val2;
+  case OpCode::OR:
+  case OpCode::ORI:
+    return val1 | val2;
+  case OpCode::XOR:
+  case OpCode::XORI:
+    return val1 ^ val2;
+  default:
+    return 0;
+  }
+}
+
 void ExecutionUnit::executeCycle()
 {
-  if (name == UnitType::ADDER)
+  if (instr_list[latency - 1] != -1)
   {
+    int idx = instr_list[latency - 1];
+    has_result = true;
+    result_tag = RS[idx].dest_tag;
+    // Compute result based on opcode and operand values
+    // This is a placeholder; actual computation logic should be implemented
+    result_val = helper(RS[idx].opcode, RS[idx].val1, RS[idx].val2);
+    RS[idx].isValid = false; // Mark the entry as done
+  }
+  for (int i = latency - 2; i >= 0; i--)
+  {
+    instr_list[i + 1] = instr_list[i];
+  }
+  for (int i = 0; i < capacity; i++)
+  {
+    if (RS[i].isValid && RS[i].ready1 && RS[i].ready2)
+    {
+      instr_list[0] = i;
+      break;
+    }
   }
 }
 
 void ExecutionUnit::flush()
 {
-  for (int i = 0; i < capacity; ++i) {
-    RS[i].busy = false;
+  for (int i = 0; i < capacity; ++i)
+  {
+    RS[i].isValid = false;
   }
-  head = -1;
-  tail = -1;
   has_result = false;
   has_exception = false;
   result_tag = 0;

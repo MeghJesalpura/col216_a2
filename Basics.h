@@ -86,7 +86,7 @@ struct ROBEntry
 
 struct RSEntry
 {
-    OpCode opcode;  // what operation to perform
+    OpCode opcode; // what operation to perform
     int dest_tag;
 
     // value, tag, ready ... for both operands
@@ -97,31 +97,24 @@ struct RSEntry
     int val2;
     int tag2;
     bool ready2;
-
-    // cycles of execution remaining (set when dispatched)
-    int cycles_left = 0;
-    bool dispatched = false;
-    bool busy = false;
-
     // other fields as required
+    bool isValid = false;    // true when is filled with a valid instruction
+    bool dispatched = false; // true when the instruction has been dispatched to execution (for tracking in-order completion)
     RSEntry() : opcode(OpCode::ADD), dest_tag(0),
                 val1(0), tag1(0), ready1(false),
-                val2(0), tag2(0), ready2(false),
-                cycles_left(0), dispatched(false), busy(false) {}
+                val2(0), tag2(0), ready2(false), isValid(false) {}
 
-    RSEntry(OpCode op, int dest, int v1, int t1, bool r1, int v2, int t2, bool r2)
+    RSEntry(OpCode op, int dest, int v1, int t1, bool r1, int v2, int t2, bool r2, bool disp = false)
     {
-        opcode   = op;
+        opcode = op;
         dest_tag = dest;
-        val1     = v1;
-        tag1     = t1;
-        ready1   = r1;
-        val2     = v2;
-        tag2     = t2;
-        ready2   = r2;
-        cycles_left = 0;
-        dispatched  = false;
-        busy = true;
+        val1 = v1;
+        tag1 = t1;
+        ready1 = r1;
+        val2 = v2;
+        tag2 = t2;
+        ready2 = r2;
+        isValid = disp;
     }
 };
 
@@ -135,8 +128,8 @@ struct RATEntry
 
     RATEntry(int v, int t, bool valid)
     {
-        tag     = t;
-        val     = v;
+        tag = t;
+        val = v;
         isValid = valid;
     }
 };
