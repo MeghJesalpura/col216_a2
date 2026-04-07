@@ -35,108 +35,110 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
   if (q.empty())
     return;
 
-  auto it = q.begin();
-  while (it != q.end() && it->done)
+  // Phase 1: Dispatch the OLDEST non-dispatched entry whose address is ready
+  for (auto it = q.begin(); it != q.end(); ++it)
   {
-    it++;
+    if (it->done)
+      continue;
+    if (it->dispatched)
+      continue;
+    if (!it->addr_ready)
+      break; // Must maintain order
+    it->dispatched = true;
+    it->cycles_left = latency;
+    break; // Only dispatch one per cycle
   }
 
-  if (it == q.end())
-    return;
-
-  LSQEntry &entry = *it;
-
-  if (!entry.addr_ready)
+  // Phase 2: Tick down all in-flight entries
+  for (auto &entry : q)
   {
-    return;
+    if (entry.done || !entry.dispatched)
+      continue;
+    if (entry.cycles_left > 0)
+      entry.cycles_left--;
   }
 
-  if (!entry.dispatched)
+  // Phase 3: Complete the oldest entry that has finished its countdown
+  for (auto it = q.begin(); it != q.end(); ++it)
   {
-    entry.dispatched = true;
-    entry.cycles_left = latency;
-  }
+    if (it->done || !it->dispatched || it->cycles_left > 0)
+      continue;
 
-  if (entry.cycles_left > 0)
-  {
-    entry.cycles_left--;
-  }
+    it->eff_addr = it->addr_val + it->offset;
+    int eff_addr = it->eff_addr;
 
-  if (entry.cycles_left > 0)
-    return;
-
-  entry.eff_addr = entry.addr_val + entry.offset;
-  int eff_addr = entry.eff_addr;
-
-  if (entry.type == LSQEntryType::LOAD)
-  {
-    if (eff_addr < 0 || eff_addr >= static_cast<int>(Memory.size()))
+    if (it->type == LSQEntryType::LOAD)
     {
-      if (!entry.broadcasted)
+      if (eff_addr < 0 || eff_addr >= static_cast<int>(Memory.size()))
       {
-        has_result = true;
-        has_exception = true;
-        result_tag = entry.dest_tag;
-        result_val = 0;
-        entry.done = true;
-        entry.exception = true;
-        entry.broadcasted = true;
-      }
-      return;
-    }
-
-    int loaded_val = Memory[eff_addr];
-    auto curr = it;
-    while (curr != q.begin())
-    {
-      --curr;
-      if (curr->type == LSQEntryType::STORE && curr->eff_addr == eff_addr)
-      {
-        loaded_val = curr->data_val;
+        if (!it->broadcasted)
+        {
+          has_result = true;
+          has_exception = true;
+          result_tag = it->dest_tag;
+          result_val = 0;
+          it->done = true;
+          it->exception = true;
+          it->broadcasted = true;
+        }
         break;
       }
-    }
 
-    if (!entry.broadcasted)
-    {
-      has_result = true;
-      has_exception = false;
-      result_tag = entry.dest_tag;
-      result_val = loaded_val;
-      entry.done = true;
-      entry.result = loaded_val;
-      entry.broadcasted = true;
-    }
-  }
-  else if (entry.type == LSQEntryType::STORE)
-  {
-    if (!entry.data_ready)
-      return;
+      int loaded_val = Memory[eff_addr];
+      auto curr = it;
+      while (curr != q.begin())
+      {
+        --curr;
+        if (curr->type == LSQEntryType::STORE && curr->eff_addr == eff_addr)
+        {
+          loaded_val = curr->data_val;
+          break;
+        }
+      }
 
-    if (eff_addr < 0 || eff_addr >= static_cast<int>(Memory.size()))
-    {
-      if (!entry.broadcasted)
+      if (!it->broadcasted)
       {
         has_result = true;
-        has_exception = true;
-        result_tag = entry.dest_tag;
-        result_val = 0;
-        entry.done = true;
-        entry.exception = true;
-        entry.broadcasted = true;
+        has_exception = false;
+        result_tag = it->dest_tag;
+        result_val = loaded_val;
+        it->done = true;
+        it->result = loaded_val;
+        it->broadcasted = true;
       }
-      return;
+      break; // Only one result per cycle
     }
-
-    if (!entry.broadcasted)
+    else if (it->type == LSQEntryType::STORE)
     {
-      has_result = true;
-      has_exception = false;
-      result_tag = entry.dest_tag;
-      result_val = entry.data_val;
-      entry.done = true;
-      entry.result = eff_addr;
-      entry.broadcasted = true;
+      if (!it->data_ready)
+        break; // Can't skip stores
+
+      if (eff_addr < 0 || eff_addr >= static_cast<int>(Memory.size()))
+      {
+        if (!it->broadcasted)
+        {
+          has_result = true;
+          has_exception = true;
+          result_tag = it->dest_tag;
+          result_val = 0;
+          it->done = true;
+          it->exception = true;
+          it->broadcasted = true;
+        }
+        break;
+      }
+
+      if (!it->broadcasted)
+      {
+        has_result = true;
+        has_exception = false;
+        result_tag = it->dest_tag;
+        result_val = it->data_val;
+        it->done = true;
+        it->result = eff_addr;
+        it->broadcasted = true;
+      }
+      break; // Only one result per cycle
     }
   }
 }

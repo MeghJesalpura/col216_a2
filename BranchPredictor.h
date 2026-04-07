@@ -9,7 +9,7 @@ public:
     int total_branches = 0;
     int correct_predictions = 0;
 
-    int counter = 0;
+    int counter = 2;
 
     int predict(int current_pc, int imm, OpCode op)
     {
