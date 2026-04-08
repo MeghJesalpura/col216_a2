@@ -68,4 +68,10 @@ public:
     bool step();
 
     void dumpArchitecturalState();
+
+    // Logging functions
+    std::string opcodeToString(OpCode op);
+    std::string unitTypeToString(UnitType unit);
+    void logInstructionStages();
+    void logInstructionStagesDetailed();
 };

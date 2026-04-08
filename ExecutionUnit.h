@@ -16,8 +16,7 @@ public:
 
   UnitType name;
   int latency;
-  unsigned long long next_seq = 0;
-
+  
   int findFreeEntry();
 
   bool has_result = false;
