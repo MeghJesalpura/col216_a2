@@ -38,6 +38,7 @@ public:
     int rob_end;
     int rob_capacity;
     std::vector<RATEntry> RAT;
+    int rob_cnt;
     std::vector<ExecutionUnit> units;
 
     LoadStoreQueue *lsq;

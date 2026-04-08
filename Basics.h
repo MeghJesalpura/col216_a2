@@ -51,6 +51,7 @@ struct ProcessorConfig
 {
   int num_regs = 32;
   int rob_size = 64;
+  // int rob_size = 4;
   int mem_size = 1024;
 
   int logic_lat = 1;

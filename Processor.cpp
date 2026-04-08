@@ -15,6 +15,7 @@ Processor::Processor(ProcessorConfig &config)
   rob_capacity = config.rob_size;
   RAT.resize(config.num_regs);
   CDB.resize(6);
+  rob_cnt = 0;
 
   // Instantiate Hardware Units
   // Adder
@@ -68,7 +69,7 @@ void Processor::stageFetch()
   if (exception)
     return;
 
-  if (pc < 0 || pc / 4 >= static_cast<int>(inst_memory.size()))
+  if (pc / 4 >= static_cast<int>(inst_memory.size()))
   {
     fetched_instr.fetched = false;
     return;
@@ -171,7 +172,7 @@ void Processor::stageDecode()
     return;
   }
 
-  if ((rob_end + 1) % rob_capacity == rob_start)
+  if (rob_cnt == rob_capacity)
   {
     return;
   }
@@ -205,6 +206,7 @@ void Processor::stageDecode()
   }
   ROB[rob_end] = rob_entry;
   rob_end = (rob_end + 1) % rob_capacity;
+  rob_cnt++;
 
   if (dest > 0)
   { // Do not rename x0
@@ -227,6 +229,7 @@ void Processor::flush()
 
   // Reset ROB
   rob_end = rob_start;
+  rob_cnt = 0;
 
   // Clear RAT (all registers point back to ARF)
   for (auto &rat_entry : RAT)
@@ -337,7 +340,7 @@ bool Processor::step()
   stageDecode();
   stageFetch();
 
-  bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_end != rob_start) || fetched_instr.fetched;
+  bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
 
   if ((exception && !exception_before) || (!more_work)) {
       clock_cycle--;
@@ -368,7 +371,7 @@ make changes to ARF and RAT(if required - need to check)*/
 void Processor::stageCommit()
 {
   std::cout << "[DEBUG][Commit] rob_start=" << rob_start << " rob_end=" << rob_end << '\n';
-  if (rob_start == rob_end)
+  if (rob_cnt == 0)
   {
     std::cout << "[DEBUG][Commit] ROB empty" << '\n';
     return;
@@ -407,6 +410,8 @@ void Processor::stageCommit()
 
   lsq->commitEntry(rob_start, Memory);
   rob_start = (rob_start + 1) % rob_capacity;
+  rob_cnt--;
+  
   std::cout << "[DEBUG][Commit] rob_start advanced to " << rob_start << '\n';
 
   // update branch predictor if this instruction was a branch
