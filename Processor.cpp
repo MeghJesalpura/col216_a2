@@ -115,6 +115,8 @@ int Processor::selectUnitForOpcode(const Instruction &instr, bool &is_lsq)
   case OpCode::ADD:
   case OpCode::SUB:
   case OpCode::ADDI:
+  case OpCode::SLT:
+  case OpCode::SLTI:
     return 0;
   case OpCode::MUL:
     return 1;
@@ -125,10 +127,9 @@ int Processor::selectUnitForOpcode(const Instruction &instr, bool &is_lsq)
   case OpCode::BNE:
   case OpCode::BLT:
   case OpCode::BLE:
-  case OpCode::J:
     return 3;
-  case OpCode::SLT:
-  case OpCode::SLTI:
+  case OpCode::J:
+    return -1; // Unconditional jump is not dispatched to any unit
   case OpCode::AND:
   case OpCode::OR:
   case OpCode::XOR:
@@ -154,10 +155,15 @@ void Processor::stageDecode()
   if (exception)
     return;
 
+  bool is_j = (fetched_instr.op == OpCode::J);
   bool is_lsq = false;
   int unit_idx = selectUnitForOpcode(fetched_instr, is_lsq);
 
-  if (is_lsq)
+  if (is_j)
+  {
+    // Jump doesn't need execution unit space
+  }
+  else if (is_lsq)
   {
     if (!lsq->has_space())
     {
@@ -183,7 +189,11 @@ void Processor::stageDecode()
 
   int rob_index = rob_end;
 
-  if (is_lsq)
+  if (is_j)
+  {
+    // Do nothing for RS/LSQ creation
+  }
+  else if (is_lsq)
   {
     lsq->createLSQEntry(fetched_instr, rob_index, RAT, ARF, ROB);
   }
@@ -200,7 +210,17 @@ void Processor::stageDecode()
     dest = -1;
   }
 
-  ROBEntry rob_entry(true, false, dest, fetched_instr.pc);
+  ROBEntry rob_entry;
+  if (is_j)
+  {
+    // Jump finishes immediately upon decode
+    rob_entry = ROBEntry(true, true, dest, fetched_instr.pc);
+  }
+  else
+  {
+    rob_entry = ROBEntry(true, false, dest, fetched_instr.pc);
+  }
+
   // For branches, store the predicted next PC so we can detect mispredictions at commit
   bool is_branch_instr = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
                           fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
@@ -558,8 +578,8 @@ void Processor::logInstructionStages()
       {
         for (const auto &rs_entry : unit.RS)
         {
-          if (rs_entry.isValid && (rs_entry.dest_tag == rob_idx || 
-              (rs_entry.dispatched && !ROB[rob_idx].ready_bit)))
+          if (rs_entry.isValid && (rs_entry.dest_tag == rob_idx ||
+                                   (rs_entry.dispatched && !ROB[rob_idx].ready_bit)))
           {
             in_execute = true;
             break;
@@ -676,7 +696,7 @@ void Processor::logInstructionStagesDetailed()
   if (fetched_instr.fetched)
   {
     std::cout << "  PC=" << std::setw(4) << fetched_instr.pc << " | " << opcodeToString(fetched_instr.op)
-              << " | rd=" << fetched_instr.dest << " rs1=" << fetched_instr.src1 
+              << " | rd=" << fetched_instr.dest << " rs1=" << fetched_instr.src1
               << " rs2=" << fetched_instr.src2 << "\n";
   }
   else
@@ -704,7 +724,8 @@ void Processor::logInstructionStagesDetailed()
             break;
           }
         }
-        if (in_execute) break;
+        if (in_execute)
+          break;
       }
 
       if (!in_execute)
@@ -752,7 +773,7 @@ void Processor::logInstructionStagesDetailed()
           int inst_idx = ROB[rob_idx].pc_entry / 4;
           if (inst_idx >= 0 && inst_idx < static_cast<int>(inst_memory.size()))
           {
-            std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx 
+            std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx
                       << "] | " << unitTypeToString(unit.name) << " | " << opcodeToString(rs_entry.opcode) << "\n";
             found_execute = true;
           }
@@ -770,8 +791,8 @@ void Processor::logInstructionStagesDetailed()
       int inst_idx = ROB[rob_idx].pc_entry / 4;
       if (inst_idx >= 0 && inst_idx < static_cast<int>(inst_memory.size()))
       {
-        std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx 
-                  << "] | LSQ [" << (lsq_entry.type == LSQEntryType::LOAD ? "LOAD" : "STORE") 
+        std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx
+                  << "] | LSQ [" << (lsq_entry.type == LSQEntryType::LOAD ? "LOAD" : "STORE")
                   << "] | " << opcodeToString(inst_memory[inst_idx].op) << "\n";
         found_execute = true;
       }
@@ -792,7 +813,7 @@ void Processor::logInstructionStagesDetailed()
       int inst_idx = ROB[rob_idx].pc_entry / 4;
       if (inst_idx >= 0 && inst_idx < static_cast<int>(inst_memory.size()))
       {
-        std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx 
+        std::cout << "  PC=" << std::setw(4) << ROB[rob_idx].pc_entry << " | ROB[" << std::setw(2) << rob_idx
                   << "] | " << opcodeToString(inst_memory[inst_idx].op) << " | Value=" << ROB[rob_idx].value << "\n";
         found_commit = true;
       }

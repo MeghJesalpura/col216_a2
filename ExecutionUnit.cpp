@@ -117,24 +117,40 @@ void ExecutionUnit::capture(int tag, int val)
 
 int ExecutionUnit::helper(OpCode op, int val1, int val2)
 {
+  int res = 0;
   switch (op)
   {
   case OpCode::ADD:
   case OpCode::ADDI:
-    return val1 + val2;
+    if (__builtin_add_overflow(val1, val2, &res))
+    {
+      has_exception = true;
+      return 0;
+    }
+    return res;
   case OpCode::SUB:
-    return val1 - val2;
+    if (__builtin_sub_overflow(val1, val2, &res))
+    {
+      has_exception = true;
+      return 0;
+    }
+    return res;
   case OpCode::MUL:
-    return val1 * val2;
+    if (__builtin_mul_overflow(val1, val2, &res))
+    {
+      has_exception = true;
+      return 0;
+    }
+    return res;
   case OpCode::DIV:
-    if (val2 == 0)
+    if (val2 == 0 || (val1 == -2147483648 && val2 == -1))
     {
       has_exception = true;
       return 0;
     }
     return val1 / val2;
   case OpCode::REM:
-    if (val2 == 0)
+    if (val2 == 0 || (val1 == -2147483648 && val2 == -1))
     {
       has_exception = true;
       return 0;
