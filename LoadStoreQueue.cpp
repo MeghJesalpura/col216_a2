@@ -44,6 +44,8 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
       continue;
     if (!it->addr_ready)
       break; // Must maintain order
+    if (it->type == LSQEntryType::STORE && !it->data_ready)
+      break;
     it->dispatched = true;
     it->cycles_left = latency;
     break; // Only dispatch one per cycle

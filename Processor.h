@@ -28,7 +28,8 @@ public:
     // architectural state (do not change)
     std::vector<int> ARF;    // regFile
     std::vector<int> Memory; // Memory
-    bool exception = false;  // exception bit
+    bool exception = false;
+    bool flushed_this_cycle = false;  // exception bit
 
     // register alias table / reorder buffer
 

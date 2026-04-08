@@ -194,14 +194,25 @@ void ExecutionUnit::dispatchReady()
   if (instr_list[0] != -1)
     return; // Pipeline slot 0 already occupied
 
+  int oldest_idx = -1;
+  unsigned long long oldest_seq = (unsigned long long)-1;
+
   for (int i = 0; i < capacity; i++)
   {
     if (RS[i].isValid && RS[i].ready1 && RS[i].ready2 && !RS[i].dispatched)
     {
-      instr_list[0] = i;
-      RS[i].dispatched = true; // Mark as dispatched to prevent re-dispatch
-      break;
+      if (oldest_idx == -1 || RS[i].seq_num < oldest_seq)
+      {
+        oldest_idx = i;
+        oldest_seq = RS[i].seq_num;
+      }
     }
+  }
+
+  if (oldest_idx != -1)
+  {
+    instr_list[0] = oldest_idx;
+    RS[oldest_idx].dispatched = true; // Mark as dispatched to prevent re-dispatch
   }
 }
 

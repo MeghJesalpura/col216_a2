@@ -330,12 +330,20 @@ bool Processor::step()
     return false;
 
   clock_cycle++;
-  stageExecuteAndBroadcast();
+  bool exception_before = exception;
+
   stageCommit();
+  stageExecuteAndBroadcast();
   stageDecode();
   stageFetch();
 
-  return (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_end != rob_start);
+  bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_end != rob_start) || fetched_instr.fetched;
+
+  if ((exception && !exception_before) || (!more_work)) {
+      clock_cycle--;
+  }
+
+  return more_work && !exception;
 }
 
 void Processor::dumpArchitecturalState()

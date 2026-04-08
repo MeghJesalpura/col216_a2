@@ -434,7 +434,7 @@ void RISCVCompiler::initOpcodeToBasicOpCode()
       {"addi", OpCode::ADDI},
       {"mul", OpCode::MUL},
       {"div", OpCode::DIV},
-      {"rem", OpCode::DIV},
+      {"rem", OpCode::REM},
       {"lw", OpCode::LW},
       {"sw", OpCode::SW},
       {"beq", OpCode::BEQ},
