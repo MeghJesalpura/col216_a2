@@ -42,7 +42,6 @@ Processor::Processor(ProcessorConfig &config)
 
 void Processor::loadProgram(const std::string &filename)
 {
-  std::cout << "[DEBUG][loadProgram] reading " << filename << '\n';
   std::ifstream file(filename);
   RISCVCompiler compiler;
   if (!file.is_open())
@@ -365,7 +364,7 @@ bool Processor::step()
   stageFetch();
 
   // Log instruction stages for debugging
-  logInstructionStages();
+  logInstructionStagesDetailed();
 
   bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
 
@@ -398,33 +397,25 @@ commit changes from oldest valid ROB entry and
 make changes to ARF and RAT(if required - need to check)*/
 void Processor::stageCommit()
 {
-  std::cout << "[DEBUG][Commit] rob_start=" << rob_start << " rob_end=" << rob_end << '\n';
   if (rob_cnt == 0)
   {
-    std::cout << "[DEBUG][Commit] ROB empty" << '\n';
     return;
   }
 
   ROBEntry &entry = ROB[rob_start];
   if (!entry.ready_bit)
   {
-    std::cout << "[DEBUG][Commit] head entry not ready" << '\n';
     return;
   }
 
   // Check if this ROB entry has an exception
   if (entry.exception)
   {
-    std::cout << "[DEBUG][Commit] exception detected at tag=" << rob_start << '\n';
     this->exception = true;
     this->exception_pc = entry.pc_entry;
     // Do NOT commit this entry — just halt
     return;
   }
-
-  std::cout << "[DEBUG][Commit] committing tag=" << rob_start
-            << " reg_id=" << entry.reg_id
-            << " value=" << entry.value << '\n';
 
   if (entry.reg_id >= 0 && entry.reg_id < static_cast<int>(ARF.size()))
   {
@@ -439,8 +430,6 @@ void Processor::stageCommit()
   lsq->commitEntry(rob_start, Memory);
   rob_start = (rob_start + 1) % rob_capacity;
   rob_cnt--;
-
-  std::cout << "[DEBUG][Commit] rob_start advanced to " << rob_start << '\n';
 
   // update branch predictor if this instruction was a branch
   Instruction &committed_instr = inst_memory[entry.pc_entry / 4];
@@ -463,9 +452,6 @@ void Processor::stageCommit()
 
     if (!was_correct)
     {
-      std::cout << "[DEBUG][Commit] branch misprediction at PC=" << branch_pc
-                << " predicted=" << entry.predicted_next_pc
-                << " actual=" << actual_next_pc << '\n';
       // Flush pipeline and redirect PC
       flush();
       pc = actual_next_pc;

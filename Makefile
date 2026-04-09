@@ -12,7 +12,7 @@ compile:
 	@echo "Compiling simulator:"
 	$(CXX) $(CXXFLAGS) -DSIMULATOR -g -O0 main.cpp Processor.cpp ExecutionUnit.cpp LoadStoreQueue.cpp compiler/compiler.cpp -o main
 	@echo "Build successful, 'main' created."
-	./main programs/code4.txt
+	./main programs/code6.txt
 
 
 # ==========================================
