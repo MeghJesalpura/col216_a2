@@ -17,12 +17,6 @@ int main(int argc, char *argv[])
   {
     max_cycles = stoi(argv[3]);
   }
-  if (max_cycles == -1)
-  {
-  }
-  else
-  {
-  }
 
   ProcessorConfig config;
   Processor cpu = Processor(config);

@@ -29,7 +29,7 @@ public:
     std::vector<int> ARF;    // regFile
     std::vector<int> Memory; // Memory
     bool exception = false;
-    bool flushed_this_cycle = false;  // exception bit
+    bool flushed_this_cycle = false; // exception bit
 
     // register alias table / reorder buffer
 
@@ -68,10 +68,4 @@ public:
     bool step();
 
     void dumpArchitecturalState();
-
-    // Logging functions
-    std::string opcodeToString(OpCode op);
-    std::string unitTypeToString(UnitType unit);
-    void logInstructionStages();
-    void logInstructionStagesDetailed();
 };

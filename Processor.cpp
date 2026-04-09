@@ -53,7 +53,7 @@ void Processor::loadProgram(const std::string &filename)
   std::ostringstream buffer;
   buffer << file.rdbuf();
   std::string riscv_code = buffer.str();
-  compiler.compile(riscv_code, "temp.pre");
+  compiler.compile(riscv_code);
   inst_memory = compiler.getInstructions();
   auto temp = compiler.getDataWords();
   for (size_t i = 0; i < temp.size() && i < Memory.size(); i++)

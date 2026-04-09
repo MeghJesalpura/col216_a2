@@ -16,7 +16,7 @@ public:
 
   UnitType name;
   int latency;
-  
+
   int findFreeEntry();
 
   bool has_result = false;

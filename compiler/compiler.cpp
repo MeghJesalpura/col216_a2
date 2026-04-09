@@ -344,34 +344,6 @@ string RISCVCompiler::normalizeRegister(const string &r) const
   return r;
 }
 
-void RISCVCompiler::writeOutput(const string &out_filename) const
-{
-  ofstream ofs(out_filename);
-  if (!ofs.is_open())
-  {
-    cerr << "Failed to open output file: " << out_filename << endl;
-    return;
-  }
-
-  for (const DataSymbol &ds : data_symbols)
-  {
-    ofs << "." << ds.name << ":";
-    for (int i = 0; i < ds.size; ++i)
-      ofs << ' ' << data_words[ds.base_index + i];
-    ofs << "\n";
-  }
-
-  for (const CompilerInstruction &inst : instructions)
-  {
-    ofs << inst.opcode;
-    for (const string &op : inst.operands)
-      ofs << " " << op;
-    ofs << "\n";
-  }
-  ofs.close();
-  cout << "Wrote preprocessed output to: " << out_filename << "\n";
-}
-
 std::vector<Instruction> RISCVCompiler::getInstructions()
 {
   vector<Instruction> result;
@@ -453,47 +425,8 @@ void RISCVCompiler::initOpcodeToBasicOpCode()
   };
 }
 
-void RISCVCompiler::compile(const string &riscv_code, const string &out_filename)
+void RISCVCompiler::compile(const string &riscv_code)
 {
-  cout << "RISCVCompiler: pre_process\n";
   pre_process(riscv_code);
-  cout << "RISCVCompiler: link\n";
   link();
-  writeOutput(out_filename);
 }
-
-#ifndef SIMULATOR
-int main(int argc, char *argv[])
-{
-  if (argc != 2)
-  {
-    cerr << "Usage: " << argv[0] << " <input-file>\n";
-    return 1;
-  }
-
-  const string filename = argv[1];
-  ifstream file(filename);
-  if (!file.is_open())
-  {
-    cerr << "Error: failed to open file: " << filename << "\n";
-    return 1;
-  }
-
-  ostringstream buffer;
-  buffer << file.rdbuf();
-  string riscv_code = buffer.str();
-
-  RISCVCompiler compiler;
-  try
-  {
-    string out = filename + ".pre";
-    compiler.compile(riscv_code, out);
-  }
-  catch (const exception &e)
-  {
-    cerr << "Compilation failed: " << e.what() << "\n";
-    return 1;
-  }
-  return 0;
-}
-#endif

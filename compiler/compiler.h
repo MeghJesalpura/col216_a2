@@ -40,7 +40,7 @@ class RISCVCompiler
 {
 public:
   RISCVCompiler();
-  void compile(const std::string &riscv_code, const std::string &out_filename);
+  void compile(const std::string &riscv_code);
   std::vector<Instruction> getInstructions();
   std::vector<int> getDataWords() { return data_words; }
 
@@ -72,7 +72,6 @@ private:
   void scanDataLabel(const std::string &line);
   void scanCodeLabel(const std::string &line);
   void scanInstruction(const std::string &line);
-  void writeOutput(const std::string &out_filename) const;
   static bool isNumber(const std::string &s);
   static int parseNumber(const std::string &s);
   std::string normalizeRegister(const std::string &r) const;
