@@ -10,10 +10,8 @@ CXXFLAGS = -std=c++17 -Wall
 # and will have its own main() function.
 compile:
 	@echo "Compiling simulator:"
-	$(CXX) $(CXXFLAGS) -DSIMULATOR -g -O0 main.cpp Processor.cpp ExecutionUnit.cpp LoadStoreQueue.cpp compiler/compiler.cpp -o main
+	$(CXX) $(CXXFLAGS) -DSIMULATOR -g -O0 $(if $(FILE), $(FILE)) main.cpp Processor.cpp ExecutionUnit.cpp LoadStoreQueue.cpp compiler/compiler.cpp -o main
 	@echo "Build successful, 'main' created."
-	./main programs/code6.txt
-
 
 # ==========================================
 # make run FILE=<filename.s>
@@ -26,3 +24,6 @@ run:
 	g++ compiler/compiler.cpp -o compiler.out
 	./compiler.out $(FILE)
 	@echo "Preprocessing complete."
+
+clean:
+	rm -f main compiler.out
