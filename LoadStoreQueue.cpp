@@ -35,23 +35,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
   if (q.empty())
     return;
 
-  // Phase 1: Dispatch the OLDEST non-dispatched entry whose address is ready
-  for (auto it = q.begin(); it != q.end(); ++it)
-  {
-    if (it->done)
-      continue;
-    if (it->dispatched)
-      continue;
-    if (!it->addr_ready)
-      break; // Must maintain order
-    if (it->type == LSQEntryType::STORE && !it->data_ready)
-      break;
-    it->dispatched = true;
-    it->cycles_left = latency;
-    break; // Only dispatch one per cycle
-  }
-
-  // Phase 2: Tick down all in-flight entries
+  // Phase 1: Tick down all in-flight entries
   for (auto &entry : q)
   {
     if (entry.done || !entry.dispatched)
@@ -60,7 +44,7 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
       entry.cycles_left--;
   }
 
-  // Phase 3: Complete the oldest entry that has finished its countdown
+  // Phase 2: Complete the oldest entry that has finished its countdown
   for (auto it = q.begin(); it != q.end(); ++it)
   {
     if (it->done || !it->dispatched || it->cycles_left > 0)
@@ -142,6 +126,28 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
       }
       break; // Only one result per cycle
     }
+  }
+}
+
+void LoadStoreQueue::dispatchReady()
+{
+  if (q.empty())
+    return;
+
+  // Dispatch the OLDEST non-dispatched entry whose address (and data for stores) is ready
+  for (auto it = q.begin(); it != q.end(); ++it)
+  {
+    if (it->done)
+      continue;
+    if (it->dispatched)
+      continue;
+    if (!it->addr_ready)
+      break; // Must maintain order
+    if (it->type == LSQEntryType::STORE && !it->data_ready)
+      break;
+    it->dispatched = true;
+    it->cycles_left = latency;
+    break; // Only dispatch one per cycle
   }
 }
 

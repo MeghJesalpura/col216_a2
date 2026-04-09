@@ -324,6 +324,7 @@ void Processor::stageExecuteAndBroadcast()
   {
     unit.dispatchReady();
   }
+  lsq->dispatchReady();
 }
 
 void Processor::broadcastOnCDB()
@@ -364,7 +365,7 @@ bool Processor::step()
   stageFetch();
 
   // Log instruction stages for debugging
-  logInstructionStagesDetailed();
+  // logInstructionStagesDetailed();
 
   bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
 
