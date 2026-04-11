@@ -20,10 +20,11 @@ compile:
 # program you wrote to preprocess the assembly labels. 
 # Example below assumes a Python script named 'compiler.py'.
 run:
-	@echo "Preprocessing $(FILE)..."
-	g++ compiler/compiler.cpp -o compiler.out
-	./compiler.out $(FILE)
-	@echo "Preprocessing complete."
+# 	@echo "Preprocessing $(FILE)..."
+# 	g++ compiler/compiler.cpp -o compiler.out
+# 	./compiler.out $(FILE)
+# 	@echo "Preprocessing complete."
+	@echo "Nothing to do at current moment."
 
 clean:
 	rm -f main compiler.out
