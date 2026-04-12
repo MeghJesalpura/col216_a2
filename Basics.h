@@ -65,7 +65,7 @@ struct ProcessorConfig
   int mult_rs_size = 2;
   int div_rs_size = 2;
   int br_rs_size = 2;
-  int lsq_rs_size = 32;
+  int lsq_rs_size = 1;
 };
 
 struct ROBEntry

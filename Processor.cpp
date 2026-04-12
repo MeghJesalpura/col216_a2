@@ -31,7 +31,7 @@ Processor::Processor(ProcessorConfig &config)
   // mentioned to take Branch Comparison latency equal to addition latency
   ExecutionUnit BitLogic(UnitType::LOGIC, config.logic_lat, config.logic_rs_size);
 
-  lsq = new LoadStoreQueue(config.mem_lat);
+  lsq = new LoadStoreQueue(config.mem_lat, config.lsq_rs_size);
 
   units.push_back(Adder);
   units.push_back(Multiplier);
