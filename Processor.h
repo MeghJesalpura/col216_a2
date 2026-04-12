@@ -17,6 +17,7 @@ private:
 
 public:
     int pc;
+    int my_pc;
     int clock_cycle;
     int curr_tag;
 

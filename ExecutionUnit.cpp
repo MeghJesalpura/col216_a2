@@ -187,6 +187,11 @@ void ExecutionUnit::executeCycle()
 {
   has_result = false;
   has_exception = false;
+  for (auto x : instr_list)
+  {
+    cout << x << " ";
+  }
+  cout << std::endl;
   if (instr_list[latency - 1] != -1)
   {
     int idx = instr_list[latency - 1];

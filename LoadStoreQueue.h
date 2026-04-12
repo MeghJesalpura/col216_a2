@@ -42,6 +42,7 @@ public:
   int latency;
   int lsq_capacity;
   int lsq_filled;
+  int lsq_active;
 
   bool has_result = false;
   bool has_exception = false;

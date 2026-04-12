@@ -2,11 +2,11 @@
 
 using std::cout;
 
-LoadStoreQueue::LoadStoreQueue(int latency, int lsq_capacity) : latency(latency), lsq_capacity(lsq_capacity), lsq_filled(0) {}
+LoadStoreQueue::LoadStoreQueue(int latency, int lsq_capacity) : latency(latency), lsq_capacity(lsq_capacity), lsq_filled(0), lsq_active(0) {}
 
 bool LoadStoreQueue::has_space()
 {
-  return lsq_filled < lsq_capacity;
+  return lsq_active < lsq_capacity;
 }
 
 void LoadStoreQueue::capture(int tag, int val)
@@ -66,6 +66,8 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
           it->done = true;
           it->exception = true;
           it->broadcasted = true;
+          if (lsq_active > 0)
+            lsq_active--;
         }
         break;
       }
@@ -91,6 +93,8 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
         it->done = true;
         it->result = loaded_val;
         it->broadcasted = true;
+        if (lsq_active > 0)
+          lsq_active--;
       }
       break; // Only one result per cycle
     }
@@ -110,6 +114,8 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
           it->done = true;
           it->exception = true;
           it->broadcasted = true;
+          if (lsq_active > 0)
+            lsq_active--;
         }
         break;
       }
@@ -123,6 +129,8 @@ void LoadStoreQueue::executeCycle(std::vector<int> &Memory)
         it->done = true;
         it->result = eff_addr;
         it->broadcasted = true;
+        if (lsq_active > 0)
+          lsq_active--;
       }
       break; // Only one result per cycle
     }
@@ -234,12 +242,14 @@ void LoadStoreQueue::createLSQEntry(const Instruction &instr, int rob_index, con
 
   q.push_back(entry);
   lsq_filled++;
+  lsq_active++;
 }
 
 void LoadStoreQueue::flush()
 {
   q.clear();
   lsq_filled = 0;
+  lsq_active = 0;
   has_result = false;
   has_exception = false;
 }

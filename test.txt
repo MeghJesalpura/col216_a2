@@ -1,3 +1,7 @@
-.A 1 2
-sw x10, 0(x0)
-lw x11, 0(x0)
+
+j label2
+
+label2:
+j label3
+
+label3:

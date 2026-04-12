@@ -5,6 +5,7 @@ using std::cout;
 Processor::Processor(ProcessorConfig &config)
 {
   pc = 0;
+  my_pc = 0;
   clock_cycle = 0;
   curr_tag = 0;
   rob_start = 0;
@@ -60,6 +61,7 @@ void Processor::loadProgram(const std::string &filename)
   {
     Memory[i] = temp[i];
   }
+  step();
 }
 
 void Processor::stageFetch()
@@ -72,14 +74,14 @@ void Processor::stageFetch()
   if (exception)
     return;
 
-  if (pc / 4 >= static_cast<int>(inst_memory.size()))
+  if (my_pc / 4 >= static_cast<int>(inst_memory.size()))
   {
     fetched_instr.fetched = false;
     return;
   }
 
-  fetched_instr = inst_memory[pc / 4];
-  fetched_instr.pc = pc; // Ensure PC is stored in instruction
+  fetched_instr = inst_memory[my_pc / 4];
+  fetched_instr.pc = my_pc; // Ensure PC is stored in instruction
   fetched_instr.fetched = true;
 
   bool is_branch = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
@@ -87,22 +89,22 @@ void Processor::stageFetch()
 
   if (is_branch)
   {
-    if (bp.predict(pc, fetched_instr.imm, fetched_instr.op))
+    if (bp.predict(my_pc, fetched_instr.imm, fetched_instr.op))
     {
-      pc = pc + fetched_instr.imm * 4;
+      my_pc = my_pc + fetched_instr.imm * 4;
     }
     else
     {
-      pc = pc + 4;
+      my_pc = my_pc + 4;
     }
   }
   else if (fetched_instr.op == OpCode::J)
   {
-    pc = pc + fetched_instr.imm * 4;
+    my_pc = my_pc + fetched_instr.imm * 4;
   }
   else
   {
-    pc = pc + 4;
+    my_pc = my_pc + 4;
   }
 }
 
@@ -173,6 +175,7 @@ void Processor::stageDecode()
   {
     if (!units[unit_idx].has_space())
     {
+      cout << "Stalling at decode for unit " << unit_idx << " due to lack of reservation station space.\n";
       return;
     }
   }
@@ -198,6 +201,7 @@ void Processor::stageDecode()
   }
   else
   {
+    cout << "Dispatching to execution unit " << unit_idx << std::endl;
     units[unit_idx].createRSEntry(fetched_instr, rob_index, RAT, ARF, ROB);
   }
 
@@ -225,7 +229,7 @@ void Processor::stageDecode()
                           fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
   if (is_branch_instr)
   {
-    rob_entry.predicted_next_pc = pc; // pc was already set by fetch's branch prediction
+    rob_entry.predicted_next_pc = my_pc; // pc was already set by fetch's branch prediction
   }
   ROB[rob_end] = rob_entry;
   rob_end = (rob_end + 1) % rob_capacity;
@@ -339,6 +343,7 @@ void Processor::broadcastOnCDB()
     int value = entry.value;
     bool exc = entry.exception;
     entry.valid = false; // Mark as consumed
+    cout << "Cycle " << clock_cycle << ": Broadcasting on CDB - Tag: " << tag << ", Value: " << value << ", Exception: " << exc << std::endl;
     for (auto &unit : units)
     {
       unit.capture(tag, value);
@@ -353,12 +358,7 @@ void Processor::broadcastOnCDB()
 
 bool Processor::step()
 {
-  if (exception)
-    return false;
-
   clock_cycle++;
-  bool exception_before = exception;
-
   stageCommit();
   stageExecuteAndBroadcast();
   stageDecode();
@@ -366,16 +366,57 @@ bool Processor::step()
 
   // Log instruction stages for debugging
   // logInstructionStagesDetailed();
-
-  bool more_work = (pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
-
-  if ((exception && !exception_before) || (!more_work))
+  pc = my_pc / 4;
+  bool more_work = (my_pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
+  cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
+  if (exception || (!more_work))
   {
     clock_cycle--;
+    return false;
   }
 
-  return more_work && !exception;
+  return true;
 }
+
+// bool Processor::step()
+// {
+//   // 1. If an exception has already halted the processor, stop immediately.
+//   if (exception)
+//     return false;
+
+//   // 2. Determine if there is work to do for THIS cycle.
+//   // Work exists if:
+//   // - The PC is still within the program bounds (more to fetch)
+//   // - OR there is an instruction currently sitting in the fetch latch (waiting for decode)
+//   // - OR the ROB is not empty (instructions are still in-flight)
+//   bool has_work_to_do = (pc / 4 < static_cast<int>(inst_memory.size())) ||
+//                         fetched_instr.fetched ||
+//                         (rob_cnt > 0);
+
+//   if (!has_work_to_do)
+//   {
+//     return false; // No work to perform; do not increment cycle count.
+//   }
+
+//   // 3. Start the cycle
+//   clock_cycle++;
+
+//   // 4. Execute stages in reverse pipeline order to prevent
+//   // instructions from skipping stages in a single cycle.
+//   stageCommit();
+//   stageExecuteAndBroadcast();
+//   stageDecode();
+//   stageFetch();
+
+//   // 5. If a stage just raised an exception, we stop here.
+//   if (exception)
+//   {
+//     return false;
+//   }
+
+//   // Return true to indicate cycle was completed and main loop should call step() again.
+//   return true;
+// }
 
 void Processor::dumpArchitecturalState()
 {
@@ -431,7 +472,7 @@ void Processor::stageCommit()
   lsq->commitEntry(rob_start, Memory);
   rob_start = (rob_start + 1) % rob_capacity;
   rob_cnt--;
-
+  cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
   // update branch predictor if this instruction was a branch
   Instruction &committed_instr = inst_memory[entry.pc_entry / 4];
   if (committed_instr.op == OpCode::BEQ || committed_instr.op == OpCode::BNE || committed_instr.op == OpCode::BLT || committed_instr.op == OpCode::BLE)
@@ -455,7 +496,7 @@ void Processor::stageCommit()
     {
       // Flush pipeline and redirect PC
       flush();
-      pc = actual_next_pc;
+      my_pc = actual_next_pc;
     }
   }
 }
