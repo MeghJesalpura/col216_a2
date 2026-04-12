@@ -187,11 +187,6 @@ void ExecutionUnit::executeCycle()
 {
   has_result = false;
   has_exception = false;
-  for (auto x : instr_list)
-  {
-    cout << x << " ";
-  }
-  cout << std::endl;
   if (instr_list[latency - 1] != -1)
   {
     int idx = instr_list[latency - 1];
@@ -202,18 +197,27 @@ void ExecutionUnit::executeCycle()
     RS[idx].isValid = false; // Mark the entry as done
   }
 
-  for (int i = latency - 2; i >= 0; i--)
-  {
-    instr_list[i + 1] = instr_list[i];
-  }
+  // for (int i = latency - 2; i >= 0; i--)
+  // {
+  //   instr_list[i + 1] = instr_list[i];
+  // }
 
-  instr_list[0] = -1;
+  // instr_list[0] = -1;
+
+  // for (auto x : instr_list)
+  // {
+  //   cout << x << " ";
+  // }
+  // cout << std::endl;
 }
 
 void ExecutionUnit::dispatchReady()
 {
-  if (instr_list[0] != -1)
-    return; // Pipeline slot 0 already occupied
+  for (int i = latency - 2; i >= 0; i--)
+  {
+    instr_list[i + 1] = instr_list[i];
+  }
+  instr_list[0] = -1;
 
   int oldest_idx = -1;
   unsigned long long oldest_seq = (unsigned long long)-1;
@@ -235,6 +239,12 @@ void ExecutionUnit::dispatchReady()
     instr_list[0] = oldest_idx;
     RS[oldest_idx].dispatched = true; // Mark as dispatched to prevent re-dispatch
   }
+
+  // for (auto x : instr_list)
+  // {
+  //   cout << x << " ";
+  // }
+  // cout << std::endl;
 }
 
 void ExecutionUnit::flush()

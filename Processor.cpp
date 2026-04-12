@@ -61,7 +61,7 @@ void Processor::loadProgram(const std::string &filename)
   {
     Memory[i] = temp[i];
   }
-  step();
+  // step();
 }
 
 void Processor::stageFetch()
@@ -72,6 +72,10 @@ void Processor::stageFetch()
 
   // Don't fetch after exception
   if (exception)
+    return;
+
+  // Don't fetch in the same cycle as a flush (branch misprediction)
+  if (flushed_this_cycle)
     return;
 
   if (my_pc / 4 >= static_cast<int>(inst_memory.size()))
@@ -175,7 +179,7 @@ void Processor::stageDecode()
   {
     if (!units[unit_idx].has_space())
     {
-      cout << "Stalling at decode for unit " << unit_idx << " due to lack of reservation station space.\n";
+      // cout << "Stalling at decode for unit " << unit_idx << " due to lack of reservation station space.\n";
       return;
     }
   }
@@ -201,7 +205,7 @@ void Processor::stageDecode()
   }
   else
   {
-    cout << "Dispatching to execution unit " << unit_idx << std::endl;
+    // cout << "Dispatching to execution unit " << unit_idx << std::endl;
     units[unit_idx].createRSEntry(fetched_instr, rob_index, RAT, ARF, ROB);
   }
 
@@ -246,6 +250,8 @@ void Processor::stageDecode()
 
 void Processor::flush()
 {
+  flushed_this_cycle = true;
+
   // Clear all execution unit reservation stations and pipelines
   for (auto &unit : units)
   {
@@ -280,6 +286,7 @@ void Processor::stageExecuteAndBroadcast()
   // calls for execution in all units and lsq and then broadcasts the ready results
   for (auto &unit : units)
   {
+    unit.dispatchReady();
     unit.executeCycle();
     if (unit.has_result)
     {
@@ -310,6 +317,7 @@ void Processor::stageExecuteAndBroadcast()
       }
     }
   }
+  lsq->dispatchReady();
   lsq->executeCycle(Memory);
   if (lsq->has_result)
   {
@@ -324,11 +332,11 @@ void Processor::stageExecuteAndBroadcast()
   broadcastOnCDB();
 
   // Dispatch newly-ready instructions AFTER broadcast so captured values are available
-  for (auto &unit : units)
-  {
-    unit.dispatchReady();
-  }
-  lsq->dispatchReady();
+  // for (auto &unit : units)
+  // {
+  //   unit.dispatchReady();
+  // }
+  // lsq->dispatchReady();
 }
 
 void Processor::broadcastOnCDB()
@@ -343,7 +351,7 @@ void Processor::broadcastOnCDB()
     int value = entry.value;
     bool exc = entry.exception;
     entry.valid = false; // Mark as consumed
-    cout << "Cycle " << clock_cycle << ": Broadcasting on CDB - Tag: " << tag << ", Value: " << value << ", Exception: " << exc << std::endl;
+    // cout << "Cycle " << clock_cycle << ": Broadcasting on CDB - Tag: " << tag << ", Value: " << value << ", Exception: " << exc << std::endl;
     for (auto &unit : units)
     {
       unit.capture(tag, value);
@@ -358,9 +366,11 @@ void Processor::broadcastOnCDB()
 
 bool Processor::step()
 {
+  flushed_this_cycle = false;
   clock_cycle++;
   stageCommit();
   stageExecuteAndBroadcast();
+  // stageCommit();
   stageDecode();
   stageFetch();
 
@@ -368,10 +378,10 @@ bool Processor::step()
   // logInstructionStagesDetailed();
   pc = my_pc / 4;
   bool more_work = (my_pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
-  cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
+  // cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
   if (exception || (!more_work))
   {
-    clock_cycle--;
+    // clock_cycle--;
     return false;
   }
 
@@ -459,7 +469,7 @@ void Processor::stageCommit()
     return;
   }
 
-  if (entry.reg_id >= 0 && entry.reg_id < static_cast<int>(ARF.size()))
+  if (entry.reg_id > 0 && entry.reg_id < static_cast<int>(ARF.size()))
   {
     ARF[entry.reg_id] = entry.value;
     if (RAT[entry.reg_id].tag == rob_start)
@@ -472,7 +482,7 @@ void Processor::stageCommit()
   lsq->commitEntry(rob_start, Memory);
   rob_start = (rob_start + 1) % rob_capacity;
   rob_cnt--;
-  cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
+  // cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
   // update branch predictor if this instruction was a branch
   Instruction &committed_instr = inst_memory[entry.pc_entry / 4];
   if (committed_instr.op == OpCode::BEQ || committed_instr.op == OpCode::BNE || committed_instr.op == OpCode::BLT || committed_instr.op == OpCode::BLE)

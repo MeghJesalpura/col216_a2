@@ -1,3 +1,7 @@
-.A 1 2
-lw x10, 0(x0)
-sw x11, 0(x0)
+.data: 1
+
+while:
+lw x1 data(x0)
+addi x1 x1 -1
+sw x1 data(x0)
+bne x1 x0 while
