@@ -31,4 +31,5 @@ public:
   void executeCycle();
   void dispatchReady();
   void flush();
+  void clearFreedFlags();
 };

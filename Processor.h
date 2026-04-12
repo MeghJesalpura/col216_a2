@@ -9,6 +9,17 @@
 #include "LoadStoreQueue.h"
 
 #include "compiler/compiler.h"
+#include <map>
+
+struct InstructionTrace
+{
+    long long sequence_num;
+    std::string raw;
+    std::map<int, std::string> cycle_to_stage;
+    bool flushed = false;
+    int first_cycle = -1;
+    int last_cycle = -1;
+};
 
 class Processor
 {
@@ -20,6 +31,9 @@ public:
     int my_pc;
     int clock_cycle;
     int curr_tag;
+
+    long long next_sequence_num = 0;
+    std::vector<InstructionTrace> traces;
 
     // pipeline registers
 
@@ -69,4 +83,6 @@ public:
     bool step();
 
     void dumpArchitecturalState();
+
+    void dumpPipelineTrace();
 };

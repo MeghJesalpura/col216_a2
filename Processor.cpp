@@ -87,6 +87,14 @@ void Processor::stageFetch()
   fetched_instr = inst_memory[my_pc / 4];
   fetched_instr.pc = my_pc; // Ensure PC is stored in instruction
   fetched_instr.fetched = true;
+  fetched_instr.sequence_num = next_sequence_num++;
+
+  InstructionTrace trace;
+  trace.sequence_num = fetched_instr.sequence_num;
+  trace.raw = fetched_instr.raw;
+  trace.cycle_to_stage[clock_cycle] = "IF";
+  trace.first_cycle = clock_cycle;
+  traces.push_back(trace);
 
   bool is_branch = (fetched_instr.op == OpCode::BEQ || fetched_instr.op == OpCode::BNE ||
                     fetched_instr.op == OpCode::BLT || fetched_instr.op == OpCode::BLE);
@@ -217,15 +225,19 @@ void Processor::stageDecode()
     dest = -1;
   }
 
+  // Record ID stage
+  if (traces[fetched_instr.sequence_num].cycle_to_stage.find(clock_cycle) == traces[fetched_instr.sequence_num].cycle_to_stage.end())
+    traces[fetched_instr.sequence_num].cycle_to_stage[clock_cycle] = "ID";
+
   ROBEntry rob_entry;
   if (is_j)
   {
     // Jump finishes immediately upon decode
-    rob_entry = ROBEntry(true, true, dest, fetched_instr.pc);
+    rob_entry = ROBEntry(true, true, dest, fetched_instr.pc, fetched_instr.sequence_num);
   }
   else
   {
-    rob_entry = ROBEntry(true, false, dest, fetched_instr.pc);
+    rob_entry = ROBEntry(true, false, dest, fetched_instr.pc, fetched_instr.sequence_num);
   }
 
   // For branches, store the predicted next PC so we can detect mispredictions at commit
@@ -251,6 +263,26 @@ void Processor::stageDecode()
 void Processor::flush()
 {
   flushed_this_cycle = true;
+
+  // Mark instructions in ROB as flushed
+  int current = rob_start;
+  for (int i = 0; i < rob_cnt; i++)
+  {
+    long long seq = ROB[current].sequence_num;
+    if (seq != -1)
+    {
+      traces[seq].flushed = true;
+      traces[seq].last_cycle = clock_cycle;
+    }
+    current = (current + 1) % rob_capacity;
+  }
+
+  // Mark fetched_instr as flushed if it exists
+  if (fetched_instr.fetched)
+  {
+    traces[fetched_instr.sequence_num].flushed = true;
+    traces[fetched_instr.sequence_num].last_cycle = clock_cycle;
+  }
 
   // Clear all execution unit reservation stations and pipelines
   for (auto &unit : units)
@@ -283,10 +315,41 @@ void Processor::flush()
 
 void Processor::stageExecuteAndBroadcast()
 {
-  // calls for execution in all units and lsq and then broadcasts the ready results
+  // 1. Dispatch newly-ready instructions into pipelines
   for (auto &unit : units)
   {
     unit.dispatchReady();
+  }
+  lsq->dispatchReady();
+
+  // 2. Record EX stage for all instructions currently in pipelines
+  for (auto &unit : units)
+  {
+    for (int idx : unit.instr_list)
+    {
+      if (idx != -1)
+      {
+        int tag = unit.RS[idx].dest_tag;
+        long long seq = ROB[tag].sequence_num;
+        if (seq != -1)
+          traces[seq].cycle_to_stage[clock_cycle] = "EX";
+      }
+    }
+  }
+  for (int idx : lsq->instr_list)
+  {
+    if (idx != -1)
+    {
+      int tag = lsq->RS[idx].dest_tag;
+      long long seq = ROB[tag].sequence_num;
+      if (seq != -1)
+        traces[seq].cycle_to_stage[clock_cycle] = "EX";
+    }
+  }
+
+  // 3. Advance pipelines and compute results
+  for (auto &unit : units)
+  {
     unit.executeCycle();
     if (unit.has_result)
     {
@@ -295,29 +358,26 @@ void Processor::stageExecuteAndBroadcast()
       cdb_entry.value = unit.result_val;
       cdb_entry.exception = unit.has_exception;
       cdb_entry.valid = true;
+
+      // Record WB stage: results computed this cycle are broadcast on the CDB
+      // WB always overwrites EX if they happen in the same cycle (last cycle of execution)
+      long long seq = ROB[unit.result_tag].sequence_num;
+      if (seq != -1)
+        traces[seq].cycle_to_stage[clock_cycle] = "WB";
+
       if (unit.name == UnitType::ADDER)
-      {
         CDB[0] = cdb_entry;
-      }
       else if (unit.name == UnitType::MULTIPLIER)
-      {
         CDB[1] = cdb_entry;
-      }
       else if (unit.name == UnitType::DIVIDER)
-      {
         CDB[2] = cdb_entry;
-      }
       else if (unit.name == UnitType::BRANCH)
-      {
         CDB[3] = cdb_entry;
-      }
       else if (unit.name == UnitType::LOGIC)
-      {
         CDB[4] = cdb_entry;
-      }
     }
   }
-  lsq->dispatchReady();
+
   lsq->executeCycle(Memory);
   if (lsq->has_result)
   {
@@ -327,16 +387,57 @@ void Processor::stageExecuteAndBroadcast()
     cdb_entry.exception = lsq->has_exception;
     cdb_entry.valid = true;
     CDB[5] = cdb_entry;
+
+    long long seq = ROB[lsq->result_tag].sequence_num;
+    if (seq != -1)
+      traces[seq].cycle_to_stage[clock_cycle] = "WB";
   }
 
+  // 4. Snoop the CDB
   broadcastOnCDB();
+}
 
-  // Dispatch newly-ready instructions AFTER broadcast so captured values are available
-  // for (auto &unit : units)
-  // {
-  //   unit.dispatchReady();
-  // }
-  // lsq->dispatchReady();
+void Processor::dumpPipelineTrace()
+{
+  std::ostringstream oss;
+  oss << "\n=== PIPELINE TRACE ===\n";
+  int max_cycle = clock_cycle;
+
+  // Header
+  oss << std::left << std::setw(17) << "Instruction" << " |";
+  for (int i = 1; i <= max_cycle; i++)
+  {
+    oss << std::left << std::setw(4) << i;
+  }
+  oss << "\n-----------------+";
+  for (int i = 1; i <= max_cycle; i++)
+  {
+    oss << "----";
+  }
+  oss << "\n";
+
+  for (const auto &trace : traces)
+  {
+    std::string instr_str = trace.raw;
+    if (trace.flushed)
+    {
+      instr_str += " [F]";
+    }
+    oss << std::left << std::setw(17) << instr_str << " |";
+    for (int i = 1; i <= max_cycle; i++)
+    {
+      if (trace.cycle_to_stage.count(i))
+      {
+        oss << std::left << std::setw(4) << trace.cycle_to_stage.at(i);
+      }
+      else
+      {
+        oss << "    ";
+      }
+    }
+    oss << "\n";
+  }
+  std::cout << oss.str();
 }
 
 void Processor::broadcastOnCDB()
@@ -378,7 +479,14 @@ bool Processor::step()
   // logInstructionStagesDetailed();
   pc = my_pc / 4;
   bool more_work = (my_pc < static_cast<int>(inst_memory.size() * 4)) || (rob_cnt > 0) || fetched_instr.fetched;
-  // cout << "Cycle " << clock_cycle << ": PC=" << pc * 4 << " | ROB entries=" << rob_cnt << " | FetchedInstr=" << fetched_instr.fetched << std::endl;
+
+  // Clear freed RS/LSQ entry flags so they can be reused in the NEXT cycle
+  for (auto &unit : units)
+  {
+    unit.clearFreedFlags();
+  }
+  lsq->clearFreedFlags();
+
   if (exception || (!more_work))
   {
     // clock_cycle--;
@@ -468,6 +576,10 @@ void Processor::stageCommit()
     // Do NOT commit this entry — just halt
     return;
   }
+
+  // Record CM stage
+  traces[entry.sequence_num].cycle_to_stage[clock_cycle] = "CM";
+  traces[entry.sequence_num].last_cycle = clock_cycle;
 
   if (entry.reg_id > 0 && entry.reg_id < static_cast<int>(ARF.size()))
   {

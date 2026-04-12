@@ -54,7 +54,7 @@ LoadStoreQueue::LoadStoreQueue(int lat, int cap)
 int LoadStoreQueue::findFreeEntry() const
 {
   for (int i = 0; i < capacity; i++)
-    if (!RS[i].isValid)
+    if (!RS[i].isValid && !RS[i].freed_this_cycle)
       return i;
   return -1;
 }
@@ -97,11 +97,12 @@ int LoadStoreQueue::findInOrderReady() const
 bool LoadStoreQueue::forwardFromStore(int load_addr, int load_seq,
                                       int &forwarded_val) const
 {
-  // Walk all LSQ entries; find the *newest* SW older than this LW
-  // that targets the same address and has its store-value ready.
-  int best_idx = -1;
+  // Walk all LSQ entries AND pending_stores to find the *newest* SW older
+  // than this LW that targets the same address.
+  bool found = false;
   unsigned long long best_seq = 0;
 
+  // 1. Check active LSQ entries
   for (int i = 0; i < capacity; i++)
   {
     const LSQEntry &e = RS[i];
@@ -109,34 +110,42 @@ bool LoadStoreQueue::forwardFromStore(int load_addr, int load_seq,
       continue;
     if (e.opcode != OpCode::SW)
       continue;
-    if (e.seq_num >= load_seq)
+    if (e.seq_num >= static_cast<unsigned long long>(load_seq))
       continue; // must be older than the load
 
-    // Compute the store's address (base + offset).
-    // At this point the store must have ready1 (base reg) since the load
-    // is about to execute — and by in-order property the store was already
-    // dispatched or at least has its address operands resolved.
     if (!e.ready1)
-      continue; // address not yet known — conservative: skip
+      continue; // address not yet known
     int store_addr = e.val1 + e.imm;
     if (store_addr != load_addr)
       continue;
     if (!e.ready_store)
       continue; // value not yet known
 
-    if (best_idx == -1 || e.seq_num > best_seq)
+    if (!found || e.seq_num > best_seq)
     {
-      best_idx = i;
       best_seq = e.seq_num;
+      forwarded_val = e.val_store;
+      found = true;
     }
   }
 
-  if (best_idx != -1)
+  // 2. Check pending_stores (SW entries that finished execution but haven't committed yet)
+  for (const auto &[tag, ps] : pending_stores)
   {
-    forwarded_val = RS[best_idx].val_store;
-    return true;
+    if (ps.address != load_addr)
+      continue;
+    if (ps.seq_num >= static_cast<unsigned long long>(load_seq))
+      continue;
+
+    if (!found || ps.seq_num > best_seq)
+    {
+      best_seq = ps.seq_num;
+      forwarded_val = ps.value;
+      found = true;
+    }
   }
-  return false;
+
+  return found;
 }
 
 // ── public interface ───────────────────────────────────────────────────────
@@ -257,21 +266,42 @@ void LoadStoreQueue::executeCycle(const std::vector<int> &memory)
   }
   else // SW
   {
-    // Store the address+value in pending_stores; the actual memory write
-    // happens at commit time (via commitEntry) to preserve precise exceptions
-    // and correct ordering in the presence of branch mispredictions.
-    pending_stores[e.dest_tag] = {addr, e.val_store};
+    // Check bounds for store address
+    if (addr < 0 || addr >= static_cast<int>(memory.size()))
+    {
+      has_exception = true;
+      result_val = 0;
+    }
+    else
+    {
+      // Store the address+value in pending_stores; the actual memory write
+      // happens at commit time (via commitEntry) to preserve precise exceptions
+      // and correct ordering in the presence of branch mispredictions.
+      pending_stores[e.dest_tag] = {addr, e.val_store, e.seq_num};
 
-    is_store_result = true;
-    store_address = addr;
-    store_value = e.val_store;
+      is_store_result = true;
+      store_address = addr;
+      store_value = e.val_store;
+    }
 
     // Broadcast on CDB so the ROB can mark this entry ready for commit.
     // SW has no register destination, so result_val is unused by the ARF.
     result_val = 0;
   }
 
-  e.isValid = false; // deallocate RS entry now that execution is complete
+  e.freed_this_cycle = true; // Mark the entry as being freed this cycle
+}
+
+void LoadStoreQueue::clearFreedFlags()
+{
+  for (int i = 0; i < capacity; i++)
+  {
+    if (RS[i].freed_this_cycle)
+    {
+      RS[i].isValid = false;
+      RS[i].freed_this_cycle = false;
+    }
+  }
 }
 
 void LoadStoreQueue::commitEntry(int rob_tag, std::vector<int> &memory)

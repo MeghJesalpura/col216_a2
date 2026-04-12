@@ -17,7 +17,7 @@ int ExecutionUnit::findFreeEntry()
   // Advance head past any entries that are no longer busy (marked as done)
   for (int i = 0; i < capacity; i++)
   {
-    if (!RS[i].isValid)
+    if (!RS[i].isValid && !RS[i].freed_this_cycle)
       return i;
   }
   return -1;
@@ -194,21 +194,20 @@ void ExecutionUnit::executeCycle()
     result_tag = RS[idx].dest_tag;
     // Compute result based on opcode and operand values
     result_val = helper(RS[idx].opcode, RS[idx].val1, RS[idx].val2);
-    RS[idx].isValid = false; // Mark the entry as done
+    RS[idx].freed_this_cycle = true; // Mark the entry as being freed this cycle
   }
+}
 
-  // for (int i = latency - 2; i >= 0; i--)
-  // {
-  //   instr_list[i + 1] = instr_list[i];
-  // }
-
-  // instr_list[0] = -1;
-
-  // for (auto x : instr_list)
-  // {
-  //   cout << x << " ";
-  // }
-  // cout << std::endl;
+void ExecutionUnit::clearFreedFlags()
+{
+  for (int i = 0; i < capacity; i++)
+  {
+    if (RS[i].freed_this_cycle)
+    {
+      RS[i].isValid = false;
+      RS[i].freed_this_cycle = false;
+    }
+  }
 }
 
 void ExecutionUnit::dispatchReady()

@@ -9,6 +9,7 @@ struct LSQEntry
 {
   bool isValid = false;
   bool dispatched = false; // In the pipeline already
+  bool freed_this_cycle = false;
 
   OpCode opcode;
   int dest_tag = -1; // ROB tag for result broadcast
@@ -33,7 +34,8 @@ struct LSQEntry
            int immediate,
            int vs, int ts, bool rs,
            bool valid)
-      : isValid(valid), opcode(op), dest_tag(dest),
+      : isValid(valid), dispatched(false), freed_this_cycle(false),
+        opcode(op), dest_tag(dest),
         val1(v1), tag1(t1), ready1(r1),
         imm(immediate),
         val_store(vs), tag_store(ts), ready_store(rs)
@@ -100,12 +102,14 @@ public:
   // Flush everything (branch misprediction / exception)
   void flush();
 
-private:
-  int latency = 1;
-  int capacity = 4;
+  void clearFreedFlags();
 
   std::vector<LSQEntry> RS;    // The reservation-station / queue entries
   std::vector<int> instr_list; // Pipeline shift-register of RS indices (same as EU)
+
+private:
+  int latency = 1;
+  int capacity = 4;
 
   // Sequence counter shared across all LSQ entries (program order)
   unsigned long long seq_counter = 0;
@@ -126,6 +130,7 @@ private:
   {
     int address;
     int value;
+    unsigned long long seq_num;
   };
   std::unordered_map<int, PendingStore> pending_stores;
 };

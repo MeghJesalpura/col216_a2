@@ -1,8 +1,7 @@
 #pragma once
 #include <string>
 
-enum class OpCode
-{
+enum class OpCode {
   ADD,
   SUB,
   ADDI,
@@ -25,18 +24,9 @@ enum class OpCode
   ORI,
   XORI
 };
-enum class UnitType
-{
-  ADDER,
-  MULTIPLIER,
-  DIVIDER,
-  LOADSTORE,
-  BRANCH,
-  LOGIC
-};
+enum class UnitType { ADDER, MULTIPLIER, DIVIDER, LOADSTORE, BRANCH, LOGIC };
 
-struct Instruction
-{
+struct Instruction {
   bool fetched = false;
 
   OpCode op;
@@ -45,10 +35,11 @@ struct Instruction
   int src2;
   int imm;
   int pc;
+  std::string raw;
+  long long sequence_num = -1;
 };
 
-struct ProcessorConfig
-{
+struct ProcessorConfig {
   int num_regs = 32;
   int rob_size = 64;
   int mem_size = 1024;
@@ -67,29 +58,30 @@ struct ProcessorConfig
   int lsq_rs_size = 32;
 };
 
-struct ROBEntry
-{
+struct ROBEntry {
   bool valid_bit = false;
   bool ready_bit = false;
   int reg_id = 0;
   int value = 0;
   int pc_entry = 0;
   bool exception = false;
-  int predicted_next_pc = -1; // For branches: what PC was predicted after this instr
+  int predicted_next_pc =
+      -1; // For branches: what PC was predicted after this instr
+  long long sequence_num = -1;
 
-  ROBEntry() : valid_bit(false), ready_bit(false), reg_id(0), value(0), pc_entry(0) {}
-  ROBEntry(bool tvalid, bool tready, int id, int pc = 0)
-  {
+  ROBEntry()
+      : valid_bit(false), ready_bit(false), reg_id(0), value(0), pc_entry(0) {}
+  ROBEntry(bool tvalid, bool tready, int id, int pc = 0, long long seq = -1) {
     valid_bit = tvalid;
     ready_bit = tready;
     reg_id = id;
     value = 0;
     pc_entry = pc;
+    sequence_num = seq;
   }
 };
 
-struct RSEntry
-{
+struct RSEntry {
   OpCode opcode; // what operation to perform
   int dest_tag;
 
@@ -103,14 +95,17 @@ struct RSEntry
   bool ready2;
   // other fields as required
   bool isValid = false;    // true when is filled with a valid instruction
-  bool dispatched = false; // true when the instruction has been dispatched to execution (for tracking in-order completion)
+  bool dispatched = false; // true when the instruction has been dispatched to
+                           // execution (for tracking in-order completion)
+  bool freed_this_cycle = false;
   unsigned long long seq_num = 0;
-  RSEntry() : opcode(OpCode::ADD), dest_tag(0),
-              val1(0), tag1(0), ready1(false),
-              val2(0), tag2(0), ready2(false), isValid(false), dispatched(false) {}
+  RSEntry()
+      : opcode(OpCode::ADD), dest_tag(0), val1(0), tag1(0), ready1(false),
+        val2(0), tag2(0), ready2(false), isValid(false), dispatched(false),
+        freed_this_cycle(false) {}
 
-  RSEntry(OpCode op, int dest, int v1, int t1, bool r1, int v2, int t2, bool r2, bool valid, bool disp = false)
-  {
+  RSEntry(OpCode op, int dest, int v1, int t1, bool r1, int v2, int t2, bool r2,
+          bool valid, bool disp = false) {
     opcode = op;
     dest_tag = dest;
     val1 = v1;
@@ -121,27 +116,26 @@ struct RSEntry
     ready2 = r2;
     isValid = valid;
     dispatched = disp;
+    freed_this_cycle = false;
   }
 };
 
-struct RATEntry
-{
+struct RATEntry {
   int tag;      // ROB tag this register is waiting on
   int val;      // last known committed value
-  bool isValid; // true => register is renamed (pending ROB result), false => val is current
+  bool isValid; // true => register is renamed (pending ROB result), false =>
+                // val is current
 
   RATEntry() : tag(-1), val(0), isValid(false) {}
 
-  RATEntry(int v, int t, bool valid)
-  {
+  RATEntry(int v, int t, bool valid) {
     tag = t;
     val = v;
     isValid = valid;
   }
 };
 
-struct CDBEntry
-{
+struct CDBEntry {
   int tag;
   int value;
   bool exception;
